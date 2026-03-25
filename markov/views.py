@@ -79,7 +79,7 @@ def _compute_matrix_metrics(P):
         
         # Visitabilité
         "n_visited": int(n_visited),
-        "fraction_visited": float(fraction_visited),
+        "fraction_visited": float(fraction_visited*100),
         
         # Hors-diagonale
         "off_diagonal_mean": float(off_diagonal[off_diagonal > 0].mean() if (off_diagonal > 0).any() else 0),
@@ -178,12 +178,22 @@ def _load_matrix_for_experiment(experiment):
             return {"error": error_msg}
 
 
-def _compute_rsd_from_matrix(P, n_steps=200, initial_split=0.5):
-    """Calcule le RSD depuis une matrice P (sans MarkovAnalyzer)."""
+def _compute_rsd_from_matrix(P, n_steps=200, initial_split=0.5, initial_state=None):
+    """Calcule le RSD depuis une matrice P (sans MarkovAnalyzer).
+    
+    Args:
+        P: matrice de transition (n_states x n_states)
+        n_steps: nombre de pas de prédiction
+        initial_split: fraction de cellules remplies (ignoré si initial_state fourni)
+        initial_state: vecteur d'état initial réel (si fourni, utilise celui-ci)
+    """
     n_states = P.shape[0]
-    C = np.zeros(n_states)
-    mid = int(n_states * initial_split)
-    C[:mid] = 1.0
+    if initial_state is not None:
+        C = np.array(initial_state, dtype=float)
+    else:
+        C = np.zeros(n_states)
+        mid = int(n_states * initial_split)
+        C[:mid] = 1.0
 
     rsd = np.zeros(n_steps)
     entropy = np.zeros(n_steps)
@@ -1242,18 +1252,178 @@ def api_partitions_pyvista(request):
 # ═══════════════════════════════════════════════════════════════
 
 def _sanitize_for_json(obj):
-    """Convertit récursivement les types numpy en types Python natifs pour JSON."""
+    """Convertit récursivement les types numpy/scipy en types Python natifs pour JSON."""
     if isinstance(obj, np.ndarray):
         return obj.tolist()
     if isinstance(obj, (np.integer,)):
         return int(obj)
     if isinstance(obj, (np.floating,)):
         return float(obj)
+    if isinstance(obj, np.bool_):
+        return bool(obj)
+    if isinstance(obj, bytes):
+        return obj.decode("utf-8", errors="replace")
     if isinstance(obj, dict):
-        return {k: _sanitize_for_json(v) for k, v in obj.items()}
+        return {str(k): _sanitize_for_json(v) for k, v in obj.items()}
     if isinstance(obj, (list, tuple)):
         return [_sanitize_for_json(v) for v in obj]
     return obj
+
+
+def _build_mixer_cylinder(cx, cy, r, z_min, z_max, n_theta=64):
+    """Construit le mélangeur cylindrique (surface semi-transparente)."""
+    v, f = _build_vtk_cylinder_surface(cx, cy, r, z_min, z_max, n_theta)
+    v_top, f_top = _build_vtk_disk(cx, cy, r, z_max, n_theta)
+    v_bot, f_bot = _build_vtk_disk(cx, cy, r, z_min, n_theta)
+    # Merge
+    all_v = list(v) + list(v_top) + list(v_bot)
+    offset1 = len(v)
+    offset2 = len(v) + len(v_top)
+    all_f = list(f) + [[i + offset1 for i in face] for face in f_top] + [[i + offset2 for i in face] for face in f_bot]
+    return all_v, all_f
+
+
+def _compute_partition_mesh_from_params(method, params, bounds):
+    """
+    Calcule les maillages de frontières uniquement depuis les paramètres et les bounds.
+    Ajoute aussi le mélangeur cylindrique comme maillage séparé.
+    """
+    if bounds is None:
+        bounds = {"xmin": -1, "xmax": 1, "ymin": -1, "ymax": 1, "zmin": 0, "zmax": 4}
+
+    xmin = float(bounds.get("xmin", -1))
+    xmax = float(bounds.get("xmax", 1))
+    ymin = float(bounds.get("ymin", -1))
+    ymax = float(bounds.get("ymax", 1))
+    zmin = float(bounds.get("zmin", 0))
+    zmax = float(bounds.get("zmax", 4))
+
+    cx, cy = (xmin + xmax) / 2, (ymin + ymax) / 2
+    r_mixer = min(xmax - xmin, ymax - ymin) / 2
+
+    mesh_groups = []
+
+    # ── Mélangeur cylindrique (toujours visible) ──
+    mv, mf = _build_mixer_cylinder(cx, cy, r_mixer, zmin, zmax)
+    if mv:
+        mesh_groups.append({
+            "label": "Mélangeur",
+            "vertices": mv,
+            "faces": mf,
+            "opacity": 0.08,
+            "color": [0.7, 0.85, 1.0],
+        })
+
+    if method == "cartesian":
+        nx = int(params.get("nx", 5))
+        ny = int(params.get("ny", 5))
+        nz = int(params.get("nz", 5))
+        x_edges = np.linspace(xmin, xmax, nx + 1)
+        y_edges = np.linspace(ymin, ymax, ny + 1)
+        z_edges = np.linspace(zmin, zmax, nz + 1)
+        all_v, all_f = [], []
+        offset = 0
+        for x in x_edges[1:-1]:
+            v = [[float(x), ymin, zmin], [float(x), ymax, zmin], [float(x), ymax, zmax], [float(x), ymin, zmax]]
+            all_v.extend(v)
+            all_f.append([offset, offset+1, offset+2, offset+3])
+            offset += 4
+        for y in y_edges[1:-1]:
+            v = [[xmin, float(y), zmin], [xmax, float(y), zmin], [xmax, float(y), zmax], [xmin, float(y), zmax]]
+            all_v.extend(v)
+            all_f.append([offset, offset+1, offset+2, offset+3])
+            offset += 4
+        for z in z_edges[1:-1]:
+            v = [[xmin, ymin, float(z)], [xmax, ymin, float(z)], [xmax, ymax, float(z)], [xmin, ymax, float(z)]]
+            all_v.extend(v)
+            all_f.append([offset, offset+1, offset+2, offset+3])
+            offset += 4
+        if all_v:
+            mesh_groups.append({"label": "Planes de division", "vertices": all_v, "faces": all_f, "opacity": 0.15, "color": [0.3, 0.5, 1.0]})
+
+    elif method == "cylindrical":
+        nr = int(params.get("nr", 3))
+        ntheta = int(params.get("ntheta", 4))
+        nz = int(params.get("nz", 2))
+        r_edges = np.linspace(0, r_mixer, nr + 1)
+        for r in r_edges[1:-1]:
+            v, f = _build_vtk_cylinder_surface(cx, cy, float(r), zmin, zmax)
+            if v:
+                mesh_groups.append({"label": f"r={float(r):.2f}", "vertices": v, "faces": f, "opacity": 0.15, "color": [0.2, 0.7, 0.4]})
+        theta_step = 2 * np.pi / ntheta
+        for i in range(1, ntheta):
+            theta = i * theta_step
+            v, f = _build_vtk_meridian_plane(cx, cy, theta, r_mixer, zmin, zmax)
+            if v:
+                mesh_groups.append({"label": f"θ={float(np.degrees(theta)):.0f}°", "vertices": v, "faces": f, "opacity": 0.10, "color": [0.9, 0.5, 0.2]})
+        z_edges = np.linspace(zmin, zmax, nz + 1)
+        for z in z_edges[1:-1]:
+            v, f = _build_vtk_disk(cx, cy, r_mixer, float(z))
+            if v:
+                mesh_groups.append({"label": f"z={float(z):.2f}", "vertices": v, "faces": f, "opacity": 0.10, "color": [0.6, 0.3, 0.8]})
+
+    elif method == "voronoi" or method == "physics":
+        n_cells = int(params.get("n_cells", 125))
+        rs = int(params.get("random_state", 42))
+        rng = np.random.RandomState(rs)
+        centroids = rng.uniform([xmin, ymin, zmin], [xmax, ymax, zmax], (n_cells, 3))
+        v, f = _build_vtk_voronoi_cells(centroids, (xmin, xmax, ymin, ymax, zmin, zmax))
+        if v:
+            mesh_groups.append({"label": "Cellules Voronoï" if method == "voronoi" else "Cellules Physics", "vertices": v, "faces": f, "opacity": 0.08, "color": [0.5, 0.5, 0.9]})
+
+    elif method == "quantile":
+        nx = int(params.get("nx", 5))
+        ny = int(params.get("ny", 5))
+        nz = int(params.get("nz", 5))
+        x_edges = np.linspace(xmin, xmax, nx + 1)
+        y_edges = np.linspace(ymin, ymax, ny + 1)
+        z_edges = np.linspace(zmin, zmax, nz + 1)
+        all_v, all_f = [], []
+        offset = 0
+        for x in x_edges[1:-1]:
+            v = [[float(x), ymin, zmin], [float(x), ymax, zmin], [float(x), ymax, zmax], [float(x), ymin, zmax]]
+            all_v.extend(v)
+            all_f.append([offset, offset+1, offset+2, offset+3])
+            offset += 4
+        for y in y_edges[1:-1]:
+            v = [[xmin, float(y), zmin], [xmax, float(y), zmin], [xmax, float(y), zmax], [xmin, float(y), zmax]]
+            all_v.extend(v)
+            all_f.append([offset, offset+1, offset+2, offset+3])
+            offset += 4
+        for z in z_edges[1:-1]:
+            v = [[xmin, ymin, float(z)], [xmax, ymin, float(z)], [xmax, ymax, float(z)], [xmin, ymax, float(z)]]
+            all_v.extend(v)
+            all_f.append([offset, offset+1, offset+2, offset+3])
+            offset += 4
+        if all_v:
+            mesh_groups.append({"label": "Planes de quantile", "vertices": all_v, "faces": all_f, "opacity": 0.15, "color": [0.8, 0.4, 0.2]})
+
+    elif method == "octree":
+        max_depth = int(params.get("max_depth", 4))
+        n_div = 2 ** max(1, min(max_depth, 4))
+        dx = (xmax - xmin) / n_div
+        dy = (ymax - ymin) / n_div
+        dz = (zmax - zmin) / n_div
+        all_v, all_f = [], []
+        offset = 0
+        for ix in range(n_div):
+            for iy in range(n_div):
+                for iz in range(n_div):
+                    bx = xmin + ix * dx
+                    by = ymin + iy * dy
+                    bz = zmin + iz * dz
+                    bv, bf = _build_vtk_box(bx, bx+dx, by, by+dy, bz, bz+dz)
+                    all_v.extend(bv)
+                    all_f.extend([[int(idx) + offset for idx in face] for face in bf])
+                    offset += len(bv)
+        if all_v:
+            mesh_groups.append({"label": "Boîtes Octree", "vertices": all_v, "faces": all_f, "opacity": 0.08, "color": [0.3, 0.8, 0.8]})
+
+    # Boîte englobante
+    v, f = _build_vtk_box(xmin, xmax, ymin, ymax, zmin, zmax)
+    mesh_groups.append({"label": "Boîte englobante", "vertices": v, "faces": f, "opacity": 0.05, "color": [0.5, 0.5, 0.5]})
+
+    return mesh_groups
 
 
 def _build_vtk_box(xmin, xmax, ymin, ymax, zmin, zmax):
@@ -1630,184 +1800,143 @@ def partitioner_3d_trame(request):
 
 def api_partitioner_trame_data(request):
     """
-    API renvoyant les données au format vtk.js pour le rendu 3D Trame.
+    API 100% DB pour le rendu 3D Trame/vtk.js.
     
-    Supporte deux modes:
-    - exp_id fourni: lit les paramètres depuis la DB, pas besoin du bucket pour la géométrie
-    - method + params: crée un nouveau partitionneur (charge depuis le bucket)
+    Paramètre requis: exp_id (ID d'une expérience en base)
+    Retourne: géométrie des frontières + statistiques + diagnostics matrice.
+    Aucun accès au bucket HuggingFace.
     """
     try:
         from .partitioner_params import get_partitioner_kwargs
 
         exp_id = request.GET.get("exp_id")
-        method = request.GET.get("method", "cartesian")
-        file_index = int(request.GET.get("file_index", 100))
-        load_particles = request.GET.get("load_particles", "1") == "1"
+        if not exp_id:
+            return JsonResponse({"error": "exp_id requis"}, status=400)
 
-        params = {}
-        coord_bounds = None
-        db_stats = None
-        db_experiment = None
+        # Charger l'expérience depuis la DB
+        try:
+            exp = Experiment.objects.select_related("partition_method", "matrix").get(id=int(exp_id))
+        except Experiment.DoesNotExist:
+            return JsonResponse({"error": f"Expérience {exp_id} non trouvée"}, status=404)
 
-        # ── Mode 1: charger une expérience existante depuis la DB ──
-        if exp_id:
-            try:
-                db_experiment = Experiment.objects.select_related("partition_method", "matrix").get(id=int(exp_id))
-            except Experiment.DoesNotExist:
-                return JsonResponse({"error": f"Expérience {exp_id} non trouvée"}, status=404)
+        pm = exp.partition_method
+        method = pm.name
+        params = pm.parameters or {}
+        kwargs = get_partitioner_kwargs(method, **params)
 
-            pm = db_experiment.partition_method
-            method = pm.name
-            params = pm.parameters or {}
-            kwargs = get_partitioner_kwargs(method, **params)
+        # Bounds par défaut (mélangeur cylindrique typique DEM)
+        coord_bounds = {"xmin": -1.0, "xmax": 1.0, "ymin": -1.0, "ymax": 1.0, "zmin": 0.0, "zmax": 4.0}
 
-            # Stats depuis la DB
-            n_states_db = db_experiment.n_states or 0
-            pm_stats = {
-                "n_states": n_states_db,
-                "n_visited": pm.n_cells_visited or 0,
-                "n_empty": max(0, (pm.n_cells or n_states_db) - (pm.n_cells_visited or 0)),
-                "fraction_visited": float(pm.population_cv > 0) if pm.population_cv else 0,
-                "cv": float(pm.population_cv) if pm.population_cv else 0,
-                "population_mean": float(pm.population_mean) if pm.population_mean else 0,
-                "population_std": float(pm.population_std) if pm.population_std else 0,
-                "population_min": 0,
-                "population_max": 0,
-            }
+        # Stats depuis PartitionMethod + raw_stats
+        n_states = exp.n_states or pm.n_cells or 0
+        raw = exp.raw_stats or {}
 
-            # Essayer d'obtenir les bounds depuis les stats existants
-            if db_experiment.raw_stats and "coord_bounds" in db_experiment.raw_stats:
-                coord_bounds = db_experiment.raw_stats["coord_bounds"]
-        else:
-            # Mode 2: paramètres manuels
-            if method == "cartesian":
-                params["nx"] = int(request.GET.get("nx", 5))
-                params["ny"] = int(request.GET.get("ny", 5))
-                params["nz"] = int(request.GET.get("nz", 5))
-            elif method == "cylindrical":
-                params["nr"] = int(request.GET.get("nr", 3))
-                params["ntheta"] = int(request.GET.get("ntheta", 4))
-                params["nz"] = int(request.GET.get("nz", 2))
-                params["radial_mode"] = request.GET.get("radial_mode", "equal_dr")
-            elif method == "voronoi":
-                params["n_cells"] = int(request.GET.get("n_cells", 125))
-                params["random_state"] = int(request.GET.get("random_state", 42))
-            elif method == "quantile":
-                params["nx"] = int(request.GET.get("nx", 5))
-                params["ny"] = int(request.GET.get("ny", 5))
-                params["nz"] = int(request.GET.get("nz", 5))
-            elif method == "octree":
-                params["max_particles"] = int(request.GET.get("max_particles", 50))
-                params["max_depth"] = int(request.GET.get("max_depth", 4))
-            kwargs = get_partitioner_kwargs(method, **params)
-            pm_stats = None
-
-        # ── Charger les coordonnées (depuis bucket) si nécessaire ──
-        coords = None
-        states = None
-        csv_file_count = 0
-
-        if load_particles or coord_bounds is None or method in ("voronoi", "octree"):
-            try:
-                HF_FOLDER = "hf://buckets/ktongue/DEM_MCM/Output Paraview"
-                fs = HfFileSystem()
-                csv_files = sorted(fs.glob(f"{HF_FOLDER}/*.csv"))
-                csv_file_count = len(csv_files)
-
-                if file_index < csv_file_count:
-                    csv_path = csv_files[file_index]
-                    with fs.open(csv_path, "rb") as f:
-                        df = pl.read_csv(f)
-                    coords = np.column_stack([
-                        df["coordinates:0"].to_numpy(),
-                        df["coordinates:1"].to_numpy(),
-                        df["coordinates:2"].to_numpy(),
-                    ])
-                else:
-                    if coord_bounds is None:
-                        coord_bounds = {"xmin": -1, "xmax": 1, "ymin": -1, "ymax": 1, "zmin": 0, "zmax": 4}
-            except Exception as e:
-                logger.warning(f"Bucket inaccessible: {e}")
-                if coord_bounds is None:
-                    coord_bounds = {"xmin": -1, "xmax": 1, "ymin": -1, "ymax": 1, "zmin": 0, "zmax": 4}
-
-        # ── Calculer les coordonnées et états ──
-        if coords is not None:
-            coord_bounds = {
-                "xmin": float(coords[:, 0].min()), "xmax": float(coords[:, 0].max()),
-                "ymin": float(coords[:, 1].min()), "ymax": float(coords[:, 1].max()),
-                "zmin": float(coords[:, 2].min()), "zmax": float(coords[:, 2].max()),
-            }
-            partitioner = create_partitioner(method, **kwargs)
-            partitioner.fit(coords)
-            states = partitioner.compute_states(coords[:, 0], coords[:, 1], coords[:, 2])
-
-            n_states = len(np.unique(states))
-            counts = np.bincount(states, minlength=n_states)
-            visited = int((counts > 0).sum())
-            non_zero = counts[counts > 0]
-            cv = float(non_zero.std() / non_zero.mean()) if len(non_zero) > 0 and non_zero.mean() > 0 else 0
-
-            db_stats = {
-                "n_particles": len(coords),
-                "n_states": int(n_states),
-                "n_visited": int(visited),
-                "n_empty": int((counts == 0).sum()),
-                "fraction_visited": float(visited / n_states) if n_states > 0 else 0,
-                "cv": cv,
-                "population_mean": float(counts.mean()),
-                "population_min": int(counts.min()),
-                "population_max": int(counts.max()),
-            }
-
-            # Maillages
-            mesh_groups = _compute_partition_mesh_vtk(method, partitioner, coords)
-
-            # Sous-échantillonner les particules
-            max_particles = 50000
-            step = max(1, len(coords) // max_particles)
-            sampled_coords = coords[::step]
-            sampled_states = [int(s) for s in states[::step]]
-        else:
-            # Pas de coords: calculer la géométrie depuis les params + bounds
-            final_stats = pm_stats or db_stats or {
-                "n_states": 0, "n_visited": 0, "n_empty": 0,
-                "cv": 0, "population_mean": 0, "population_min": 0, "population_max": 0,
-            }
-            mesh_groups = _compute_partition_mesh_from_params(method, params, coord_bounds)
-            sampled_coords = None
-            sampled_states = []
-            final_stats = pm_stats or db_stats
-
-        final_stats = db_stats or pm_stats or {
-            "n_particles": 0, "n_states": 0, "n_visited": 0, "n_empty": 0,
-            "fraction_visited": 0, "cv": 0, "population_mean": 0,
-            "population_min": 0, "population_max": 0,
+        stats = {
+            "n_states": int(n_states),
+            "n_cells": int(pm.n_cells or n_states),
+            "n_visited": int(raw.get("n_states_visited", pm.n_cells_visited or 0)),
+            "n_empty": int(raw.get("n_states_empty", 0)),
+            "fraction_visited": float(raw.get("fraction_visited", 0)),
+            "cv": float(pm.population_cv) if pm.population_cv else 0,
+            "population_mean": float(pm.population_mean) if pm.population_mean else 0,
+            "population_std": float(pm.population_std) if pm.population_std else 0,
         }
+
+        # Diagnostics matrice depuis TransitionMatrix
+        matrix_data = None
+        if hasattr(exp, 'matrix') and exp.matrix:
+            tm = exp.matrix
+            matrix_data = {
+                "diagonal_mean": float(tm.diagonal_mean) if tm.diagonal_mean else 0,
+                "diagonal_std": float(tm.diagonal_std) if tm.diagonal_std else 0,
+                "eigenvalue_2": float(tm.eigenvalue_2) if tm.eigenvalue_2 else 0,
+                "spectral_gap": float(tm.spectral_gap) if tm.spectral_gap else 0,
+                "n_states_visited": int(tm.n_states_visited or 0),
+                "fraction_visited": float(tm.fraction_visited or 0),
+            }
+
+        # Calculer la géométrie des frontières depuis les paramètres uniquement
+        mesh_groups = _compute_partition_mesh_from_params(method, params, coord_bounds)
 
         result = {
             "success": True,
             "method": method,
             "parameters": {k: (int(v) if isinstance(v, (np.integer,)) else v) for k, v in kwargs.items()},
-            "statistics": final_stats,
+            "statistics": stats,
+            "matrix": matrix_data,
             "mesh_groups": _sanitize_for_json(mesh_groups),
-            "file_index": file_index,
-            "file_count": csv_file_count,
         }
 
-        if sampled_coords is not None:
-            result["particles"] = {
-                "x": [float(v) for v in sampled_coords[:, 0]],
-                "y": [float(v) for v in sampled_coords[:, 1]],
-                "z": [float(v) for v in sampled_coords[:, 2]],
-                "states": sampled_states,
-                "n_states": len(set(sampled_states)),
-                "count": len(sampled_states),
-            }
-        else:
-            result["particles"] = None
-
         return JsonResponse(result)
+
+    except Exception as e:
+        return JsonResponse({"error": str(e), "traceback": traceback.format_exc()}, status=500)
+
+
+def api_partitioner_particles(request):
+    """
+    Charge les particules depuis le bucket HuggingFace pour une expérience.
+    Retourne les coordonnées + états de partition pour rendu 3D.
+    """
+    try:
+        from .partitioner_params import get_partitioner_kwargs
+
+        exp_id = request.GET.get("exp_id")
+        if not exp_id:
+            return JsonResponse({"error": "exp_id requis"}, status=400)
+
+        exp = Experiment.objects.select_related("partition_method").get(id=int(exp_id))
+        pm = exp.partition_method
+        method = pm.name
+        params = pm.parameters or {}
+        kwargs = get_partitioner_kwargs(method, **params)
+
+        # Charger depuis bucket
+        HF_FOLDER = "hf://buckets/ktongue/DEM_MCM/Output Paraview"
+        fs = HfFileSystem()
+        csv_files = sorted(fs.glob(f"{HF_FOLDER}/*.csv"))
+
+        file_index = exp.start_index or 0
+        if file_index >= len(csv_files):
+            return JsonResponse({"error": f"File index {file_index} hors limites ({len(csv_files)} fichiers)"}, status=400)
+
+        csv_path = csv_files[file_index]
+        with fs.open(csv_path, "rb") as f:
+            df = pl.read_csv(f)
+
+        coords = np.column_stack([
+            df["coordinates:0"].to_numpy(),
+            df["coordinates:1"].to_numpy(),
+            df["coordinates:2"].to_numpy(),
+        ])
+
+        partitioner = create_partitioner(method, **kwargs)
+        partitioner.fit(coords)
+        states = partitioner.compute_states(coords[:, 0], coords[:, 1], coords[:, 2])
+
+        # Sous-échantillonner si trop de points
+        max_particles = 50000
+        step = max(1, len(coords) // max_particles)
+        sampled = coords[::step]
+        sampled_states = [int(s) for s in states[::step]]
+        n_states = int(len(np.unique(states)))
+
+        return JsonResponse({
+            "success": True,
+            "particles": {
+                "x": [float(v) for v in sampled[:, 0]],
+                "y": [float(v) for v in sampled[:, 1]],
+                "z": [float(v) for v in sampled[:, 2]],
+                "states": sampled_states,
+                "n_states": n_states,
+                "count": len(sampled_states),
+            },
+            "bounds": {
+                "xmin": float(coords[:, 0].min()), "xmax": float(coords[:, 0].max()),
+                "ymin": float(coords[:, 1].min()), "ymax": float(coords[:, 1].max()),
+                "zmin": float(coords[:, 2].min()), "zmax": float(coords[:, 2].max()),
+            },
+        })
 
     except Exception as e:
         return JsonResponse({"error": str(e), "traceback": traceback.format_exc()}, status=500)
@@ -2520,3 +2649,342 @@ def api_analysis_generate_images(request):
             'error': traceback.format_exc()
         }, status=500)
 
+
+def api_analysis_data(request):
+    """
+    Retourne les données d'analyse pour les expériences sélectionnées.
+    
+    GET /api/analysis/data/?exp_ids=1,2,3
+    Retourne: comparaison, eigenvalues, entropy_histories avec labels intelligents.
+    """
+    try:
+        exp_ids_str = request.GET.get("exp_ids", "")
+        if not exp_ids_str:
+            return JsonResponse({"error": "exp_ids requis"}, status=400)
+
+        exp_ids = [int(x) for x in exp_ids_str.split(",") if x.strip().isdigit()]
+        experiments = Experiment.objects.select_related("partition_method", "matrix").filter(
+            id__in=exp_ids
+        )
+
+        # Collecter les données
+        exp_data_list = []
+        for exp in experiments:
+            pm = exp.partition_method
+            matrix = exp.matrix if hasattr(exp, 'matrix') else None
+            raw = exp.raw_stats or {}
+
+            d = {
+                "id": exp.id,
+                "name": exp.folder_name,
+                "method": pm.name,
+                "label": pm.label,
+                "n_states": exp.n_states or pm.n_cells or 0,
+                "nlt": exp.nlt or 0,
+                "step_size": exp.step_size or 1,
+                "start_index": exp.start_index or 0,
+                "parameters": pm.parameters or {},
+                "diagonal_mean": float(matrix.diagonal_mean) if matrix and matrix.diagonal_mean else 0,
+                "diagonal_std": float(matrix.diagonal_std) if matrix and matrix.diagonal_std else 0,
+                "eigenvalue_2": float(matrix.eigenvalue_2) if matrix and matrix.eigenvalue_2 else 0,
+                "spectral_gap": float(matrix.spectral_gap) if matrix and matrix.spectral_gap else 0,
+                "n_states_visited": int(matrix.n_states_visited) if matrix else 0,
+                "fraction_visited": float(matrix.fraction_visited) if matrix else 0,
+            }
+
+            # Compute RSD and entropy from matrix
+            d["rsd_markov"] = []
+            d["entropy_history"] = []
+            d["rsd_initial"] = 0
+            d["rsd_final"] = 0
+            d["mixing_time_50"] = None
+            d["mixing_time_90"] = None
+            if matrix and matrix.matrix_bucket_path:
+                try:
+                    from bucket_io import load_matrix_from_bucket
+                    P = load_matrix_from_bucket(matrix.matrix_bucket_path)
+                    # 6000 pas = 60 secondes (dt=0.01s)
+                    n_steps_rsd = min(6000, P.shape[0])
+                    rsd_result = _compute_rsd_from_matrix(P, n_steps=n_steps_rsd)
+                    d["rsd_markov"] = rsd_result["rsd_percent"]
+                    d["entropy_history"] = rsd_result["entropy"]
+                    d["rsd_initial"] = rsd_result["rsd_initial"]
+                    d["rsd_final"] = rsd_result["rsd_final"]
+                    d["mixing_time_50"] = rsd_result["mixing_time_50"]
+                    d["mixing_time_90"] = rsd_result["mixing_time_90"]
+                except Exception as e:
+                    logger.warning(f"RSD computation failed for {exp.folder_name}: {e}")
+
+            exp_data_list.append(d)
+
+        # Détecter les paramètres qui varient
+        varying_params = _detect_varying_params(exp_data_list)
+
+        # Générer les labels intelligents
+        for d in exp_data_list:
+            d["smart_label"] = _make_smart_label(d, varying_params)
+
+        return JsonResponse({
+            "success": True,
+            "experiments": exp_data_list,
+            "varying_params": varying_params,
+            "count": len(exp_data_list),
+        })
+
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
+
+
+def _detect_varying_params(exp_list):
+    """Détecte quels paramètres varient entre les expériences sélectionnées."""
+    if len(exp_list) <= 1:
+        return ["method"]
+
+    varying = []
+    # Check each parameter
+    checks = {
+        "method": lambda d: d["method"],
+        "n_states": lambda d: d["n_states"],
+        "nlt": lambda d: d["nlt"],
+        "step_size": lambda d: d["step_size"],
+        "start_index": lambda d: d["start_index"],
+    }
+
+    for param, getter in checks.items():
+        values = set(getter(d) for d in exp_list)
+        if len(values) > 1:
+            varying.append(param)
+
+    # Also check nested parameters
+    all_params = set()
+    for d in exp_list:
+        all_params.update(d["parameters"].keys())
+    for p in sorted(all_params):
+        values = set()
+        for d in exp_list:
+            v = d["parameters"].get(p)
+            if v is not None:
+                values.add(str(v))
+        if len(values) > 1:
+            varying.append(p)
+
+    return varying or ["label"]
+
+
+def _make_smart_label(exp, varying_params):
+    """Crée un label court basé sur les paramètres qui varient."""
+    parts = []
+    for p in varying_params:
+        if p == "method":
+            parts.append(exp["method"])
+        elif p == "n_states":
+            parts.append(f"{exp['n_states']}c")
+        elif p == "nlt":
+            parts.append(f"nlt={exp['nlt']}")
+        elif p == "step_size":
+            parts.append(f"step={exp['step_size']}")
+        elif p == "start_index":
+            parts.append(f"start={exp['start_index']}")
+        elif p in exp["parameters"]:
+            parts.append(f"{p}={exp['parameters'][p]}")
+    if not parts:
+        parts.append(exp["label"][:20])
+    return " | ".join(parts[:3])  # Max 3 labels
+
+
+def api_rsd_comparison(request):
+    """
+    Calcule et compare les courbes RSD Markov et DEM pour une expérience.
+    
+    GET /api/rsd-comparison/?exp_id=123
+    Retourne: rsd_markov[], rsd_dem[], time_steps[]
+    """
+    try:
+        from bucket_io import HfFileSystem
+        from .partitioner_params import get_partitioner_kwargs
+
+        exp_id = request.GET.get("exp_id")
+        if not exp_id:
+            return JsonResponse({"error": "exp_id requis"}, status=400)
+
+        exp = Experiment.objects.select_related("partition_method", "matrix").get(id=int(exp_id))
+        pm = exp.partition_method
+        method = pm.name
+        params = pm.parameters or {}
+        kwargs = get_partitioner_kwargs(method, **params)
+
+        start = exp.start_index or 0
+        step_size = exp.step_size or 1
+
+        # Time: DEM step = 0.01s, Markov step = 0.01 * step_size (s)
+        # 60s total -> DEM: 6000 steps, Markov: 6000 / step_size steps
+        dem_dt = .01
+        markov_dt = dem_dt * step_size*100
+        total_time = 60.0
+        n_dem_steps = int(total_time / dem_dt)
+        n_markov_steps = int(total_time / markov_dt)
+
+        # Sous-echantillonnage
+        dem_sample_every = max(1, n_dem_steps // 100)
+
+        # --- Load DEM data and partitioner ---
+        rsd_dem = []
+        rsd_markov = []
+        rsd_markov_entropy = []
+        try:
+            HF_FOLDER = "hf://buckets/ktongue/DEM_MCM/Output Paraview"
+            fs = HfFileSystem()
+            all_csv = sorted(fs.glob(f"{HF_FOLDER}/*.csv"))
+
+            # Load reference snapshot to fit partitioner
+            ref_idx = min(start, len(all_csv) - 1)
+            with fs.open(all_csv[ref_idx], "rb") as f:
+                df_ref = pl.read_csv(f)
+            coords_ref = np.column_stack([
+                df_ref["coordinates:0"].to_numpy(),
+                df_ref["coordinates:1"].to_numpy(),
+                df_ref["coordinates:2"].to_numpy(),
+            ])
+            partitioner = create_partitioner(method, **kwargs)
+            partitioner.fit(coords_ref)
+            states_ref = partitioner.compute_states(coords_ref[:, 0], coords_ref[:, 1], coords_ref[:, 2])
+
+            # Initial state vector from DEM (particle counts per cell, normalized)
+            n_states = int(states_ref.max()) + 1
+            initial_counts = np.bincount(states_ref, minlength=n_states).astype(float)
+            initial_state = initial_counts / initial_counts.sum() if initial_counts.sum() > 0 else initial_counts
+
+            # --- Markov RSD from matrix with SAME initial state ---
+            if exp.matrix and exp.matrix.matrix_bucket_path:
+                try:
+                    from bucket_io import load_matrix_from_bucket
+                    P = load_matrix_from_bucket(exp.matrix.matrix_bucket_path)
+                    mr = _compute_rsd_from_matrix(P, n_steps=n_markov_steps, initial_state=initial_state)
+                    rsd_markov = mr["rsd_percent"]
+                    rsd_markov_entropy = mr["entropy"]
+                except Exception as e:
+                    logger.warning(f"Markov RSD failed: {e}")
+
+            # --- DEM RSD from snapshots at each timestep ---
+            for t in range(0, n_dem_steps, dem_sample_every):
+                file_idx = start + t  # DEM files are at consecutive indices
+                if file_idx >= len(all_csv):
+                    break
+                try:
+                    with fs.open(all_csv[file_idx], "rb") as f:
+                        df = pl.read_csv(f)
+                    coords = np.column_stack([
+                        df["coordinates:0"].to_numpy(),
+                        df["coordinates:1"].to_numpy(),
+                        df["coordinates:2"].to_numpy(),
+                    ])
+                    states = partitioner.compute_states(coords[:, 0], coords[:, 1], coords[:, 2])
+                    counts = np.bincount(states, minlength=n_states)
+                    visited = counts[counts > 0]
+                    if len(visited) > 1:
+                        rsd_val = float(visited.std() / visited.mean() * 100)
+                    else:
+                        rsd_val = 0.0
+                    rsd_dem.append({"t": t, "rsd": rsd_val})
+                except Exception:
+                    continue
+        except Exception as e:
+            logger.warning(f"DEM/Markov RSD failed: {e}")
+
+        return JsonResponse({
+            "success": True,
+            "method": method,
+            "step_size": step_size,
+            "n_markov_steps": n_markov_steps,
+            "n_dem_steps": n_dem_steps,
+            "markov_dt": markov_dt,
+            "dem_dt": dem_dt,
+            "total_time_s": total_time,
+            "rsd_markov": rsd_markov,
+            "rsd_markov_entropy": rsd_markov_entropy,
+            "rsd_dem": rsd_dem,
+            "label": _make_smart_label(
+                {"method": method, "n_states": exp.n_states or 0, "nlt": exp.nlt or 0,
+                 "step_size": step_size, "start_index": start, "parameters": params, "label": pm.label},
+                _detect_varying_params([{
+                    "method": method, "n_states": exp.n_states or 0, "nlt": exp.nlt or 0,
+                    "step_size": step_size, "start_index": start, "parameters": params, "label": pm.label
+                }])
+            ),
+        })
+
+    except Exception as e:
+        return JsonResponse({"error": str(e), "traceback": traceback.format_exc()}, status=500)
+
+
+# ═══════════════════════════════════════════════════════════════
+# RESULTS GALLERY VIEW
+# ═══════════════════════════════════════════════════════════════
+
+def results_gallery(request):
+    """Display gallery of all experiment results with glass effect."""
+    
+    # Fetch all experiments with related data
+    experiments = Experiment.objects.select_related(
+        "partition_method", "matrix"
+    ).prefetch_related("rsd_results").all()
+    
+    # Map experiments to result cards
+    results = []
+    for exp in experiments:
+        rsd_dem = exp.rsd_results.filter(source="dem").first()
+        rsd_markov = exp.rsd_results.filter(source="markov").first()
+        
+        results.append({
+            "id": exp.id,
+            "name": exp.folder_name[:50],
+            "analysis_type": exp.partition_method.get_name_display(),
+            "status": "completed" if (rsd_dem and rsd_markov) else "pending",
+            "get_status_display": "Complétée" if (rsd_dem and rsd_markov) else "En cours",
+            "image_url": None,  # No image URL for experiments
+            "iterations": exp.n_states,
+            "accuracy": float(exp.matrix.diagonal_mean * 100) if exp.matrix else 0,
+            "duration": f"{exp.nlt} paires",
+            "detail_url": f"/markov/experiments/{exp.id}/",
+            "download_url": f"/markov/api/download-experiment/{exp.id}/",
+        })
+    
+    # Count statuses
+    total_results = len(results)
+    completed_count = sum(1 for r in results if r["status"] == "completed")
+    pending_count = sum(1 for r in results if r["status"] == "pending")
+    failed_count = 0  # No failed results in our case
+    
+    return render(request, "markov/results_gallery.html", {
+        "results": results,
+        "total_results": total_results,
+        "completed_count": completed_count,
+        "pending_count": pending_count,
+        "failed_count": failed_count,
+    })
+
+
+def image_gallery(request):
+    """Display image gallery with glass effect (placeholder for future image storage)."""
+    
+    # For now, we'll create a gallery from experiment matrices
+    # In future, this could use a dedicated GalleryImage model
+    
+    experiments = Experiment.objects.select_related(
+        "partition_method", "matrix"
+    ).all()
+    
+    gallery_items = []
+    for exp in experiments:
+        gallery_items.append({
+            "id": exp.id,
+            "title": exp.folder_name[:50],
+            "description": f"{exp.partition_method.label} - {exp.n_states} états",
+            "image_url": f"/markov/api/experiment-thumbnail/{exp.id}/",
+            "full_url": f"/markov/experiments/{exp.id}/",
+        })
+    
+    return render(request, "markov/image_gallery.html", {
+        "gallery_items": gallery_items,
+        "total_items": len(gallery_items),
+    })

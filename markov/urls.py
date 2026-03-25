@@ -6,6 +6,8 @@ app_name = "markov"
 urlpatterns = [
     # Pages
     path("", views.dashboard, name="dashboard"),
+    path("results/", views.results_gallery, name="results_gallery"),
+    path("gallery/", views.image_gallery, name="image_gallery"),
     path("analysis/", views.unified_analysis, name="unified_analysis"),
     path("experiments/", views.experiment_list, name="experiment_list"),
     path("experiments/<int:pk>/", views.experiment_detail, name="experiment_detail"),
@@ -41,8 +43,11 @@ urlpatterns = [
     path("api/partitioner/3d-data/", views.api_partitioner_3d_data, name="api_partitioner_3d_data"),
     path("api/partitioner/dem-markov-3d/", views.api_dem_vs_markov_3d, name="api_dem_vs_markov_3d"),
     path("api/partitioner/trame-data/", views.api_partitioner_trame_data, name="api_partitioner_trame_data"),
+    path("api/partitioner/particles/", views.api_partitioner_particles, name="api_partitioner_particles"),
     
     # Unified Analysis APIs
     path("api/analysis/experiments/", views.api_analysis_experiments, name="api_analysis_experiments"),
     path("api/analysis/generate-images/", views.api_analysis_generate_images, name="api_analysis_generate_images"),
+    path("api/analysis/data/", views.api_analysis_data, name="api_analysis_data"),
+    path("api/rsd-comparison/", views.api_rsd_comparison, name="api_rsd_comparison"),
 ]
