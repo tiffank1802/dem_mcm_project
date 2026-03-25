@@ -1,0 +1,103 @@
+{% load static %}
+
+<!-- Partial: Method Cards with Liquid Glass Effect -->
+<!-- Usage: {% include 'markov/partials/method-cards-liquid.html' with methods=methods %}  -->
+
+<div class="methods-grid-liquid">
+    {% for method in methods %}
+    <div class="method-card-liquid" data-method-id="{{ method.name }}" data-method-cells="{{ method.n_cells }}">
+        
+        <!-- Header avec icône et titre -->
+        <div class="card-header">
+            <div class="card-icon">
+                {% if method.name == 'cartesian' %}
+                    📦
+                {% elif method.name == 'cylindrical' %}
+                    🔄
+                {% elif method.name == 'voronoi' %}
+                    🎲
+                {% elif method.name == 'quantile' %}
+                    📊
+                {% elif method.name == 'octree' %}
+                    🌳
+                {% elif method.name == 'physics' %}
+                    ⚛️
+                {% else %}
+                    🔷
+                {% endif %}
+            </div>
+            <div>
+                <h3 class="card-title">{{ method.get_name_display }}</h3>
+                <p class="card-subtitle">Méthode de partitionnement</p>
+            </div>
+        </div>
+
+        <!-- Contenu principal -->
+        <div class="card-content">
+            
+            <!-- Métriques -->
+            <div class="metric">
+                <span class="metric-label">Cellules</span>
+                <span class="metric-value">{{ method.n_cells }}</span>
+            </div>
+
+            <div class="metric">
+                <span class="metric-label">Visitées</span>
+                <span class="metric-value">{{ method.n_cells_visited }}</span>
+            </div>
+
+            {% if method.population_cv %}
+            <div class="metric">
+                <span class="metric-label">CV Population</span>
+                <span class="metric-value">{{ method.population_cv|floatformat:3 }}</span>
+            </div>
+            {% endif %}
+
+            <!-- Description -->
+            {% if method.description %}
+            <div class="card-description">
+                {{ method.description|truncatewords:20 }}
+            </div>
+            {% endif %}
+
+            <!-- Badge de performance -->
+            {% if method.population_cv %}
+                {% if method.population_cv < 0.5 %}
+                <span class="method-badge" style="background: rgba(34, 197, 94, 0.2); border-color: rgb(34, 197, 94);">
+                    ✓ Excellent
+                </span>
+                {% elif method.population_cv < 1.0 %}
+                <span class="method-badge" style="background: rgba(59, 130, 246, 0.2); border-color: rgb(59, 130, 246);">
+                    ✓ Bon
+                </span>
+                {% else %}
+                <span class="method-badge" style="background: rgba(239, 68, 68, 0.2); border-color: rgb(239, 68, 68);">
+                    ⚠ À améliorer
+                </span>
+                {% endif %}
+            {% endif %}
+
+            <!-- Bouton d'action -->
+            <a href="{% url 'markov:experiment_list' %}?method={{ method.name }}" class="card-button">
+                Voir les expériences →
+            </a>
+
+        </div>
+    </div>
+    {% empty %}
+    <div style="grid-column: 1 / -1; text-align: center; padding: 2rem; opacity: 0.5;">
+        <p>Aucune méthode de partitionnement disponible</p>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Styles spécifiques aux badges de performance -->
+<style>
+    .method-badge {
+        transition: all 0.3s ease;
+    }
+    
+    .method-card-liquid:hover .method-badge {
+        box-shadow: 0 0 10px currentColor;
+    }
+</style>

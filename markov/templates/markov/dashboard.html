@@ -56,34 +56,9 @@
         </div>
     </div>
 
-    <!-- ═══ PAR MÉTHODE ═══ -->
-    <h2 class="text-lg font-bold text-gray-800 mb-4">Méthodes de partitionnement</h2>
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
-        {% for m in methods %}
-        <a href="{% url 'markov:experiment_list' %}?method={{ m.name }}"
-           class="glass-card p-5 hover:shadow-lg transition-all cursor-pointer group">
-            <div class="flex items-center gap-3 mb-3">
-                <span class="px-3 py-1 rounded-full text-xs font-bold method-{{ m.name }}">
-                    {{ m.name|upper }}
-                </span>
-                <span class="text-xs text-gray-400">{{ m.count }} expériences</span>
-            </div>
-            <div class="grid grid-cols-2 gap-2 text-xs text-gray-600">
-                <div>
-                    <span class="text-gray-400">Cellules moy:</span>
-                    {{ m.avg_cells|floatformat:0 }}
-                </div>
-                <div>
-                    <span class="text-gray-400">CV moy:</span>
-                    {{ m.avg_cv|floatformat:2|default:"—" }}
-                </div>
-            </div>
-            <div class="mt-2 text-xs text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity">
-                Voir les expériences →
-            </div>
-        </a>
-        {% endfor %}
-    </div>
+    <!-- ═══ PAR MÉTHODE (Liquid Glass Cards) ═══ -->
+    <h2 class="text-lg font-bold text-gray-800 mb-4">🔮 Méthodes de partitionnement</h2>
+    {% include "markov/partials/method-cards-liquid.html" with methods=methods %}
 
     <!-- ═══ RÉCENTES ═══ -->
     <h2 class="text-lg font-bold text-gray-800 mb-4">Expériences récentes</h2>

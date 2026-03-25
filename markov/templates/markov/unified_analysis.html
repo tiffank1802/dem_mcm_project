@@ -235,15 +235,6 @@ let analysisState = {
 };
 
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('🚀 Page loaded, initializing...');
-    const msg = document.getElementById('initial-message');
-    if (msg) {
-        const p1 = msg.querySelector('p');
-        const p2 = msg.querySelectorAll('p')[1];
-        p1.textContent = '⏳ Chargement des expériences et initialisation du système...';
-        if (p2) p2.textContent = '(La première génération peut prendre 2-3 minutes)';
-    }
-    
     loadFilterOptions();
     loadExperiments();
     
@@ -383,272 +374,222 @@ function getSelectedAnalyses() {
 }
 
 async function generateAnalyses() {
-    console.log('🔄 Generate button clicked');
-    const selectedExperimentIds = Array.from(analysisState.selectedExperimentIds);
-    const analyses = getSelectedAnalyses();
-    
-    console.log('Selected experiments:', selectedExperimentIds);
-    console.log('Selected analyses:', analyses);
-    
-    if (selectedExperimentIds.length === 0) {
-        alert('❌ Veuillez sélectionner au moins une expérience');
-        return;
-    }
-    
-    if (analyses.length === 0) {
-        alert('❌ Veuillez sélectionner au least une analyse');
-        return;
-    }
-    
-    const globalParams = {
-        figsize: [parseInt(document.getElementById('param-figsize-w').value), parseInt(document.getElementById('param-figsize-h').value)],
-        n_steps: parseInt(document.getElementById('param-n-steps').value),
-        dem_criterion: document.getElementById('param-dem-criterion').value,
-        export_format: 'PNG'
-    };
-    
-    console.log('Global params:', globalParams);
-    
-    showProgressBar();
-    const progressDiv = document.getElementById('generation-progress');
+    const selectedIds = Array.from(analysisState.selectedExperimentIds);
+    if (selectedIds.length === 0) { alert('Sélectionnez au moins une expérience'); return; }
+
     const genBtn = document.querySelector('button[onclick="generateAnalyses()"]');
     if (genBtn) genBtn.disabled = true;
-    
-    const statusMsg = document.createElement('div');
-    statusMsg.style.cssText = 'padding: 12px 16px; background: rgba(37, 99, 235, 0.1); border: 1px solid rgba(37, 99, 235, 0.3); border-radius: 8px; margin-top: 12px; color: #1e40af; font-size: 13px; font-weight: 500;';
-    statusMsg.textContent = '⏳ Initialisation du système d\'analyse (peut prendre 2-3 min la première fois)...';
-    progressDiv.parentNode.insertBefore(statusMsg, progressDiv.nextSibling);
-    
+    showProgressBar();
+
     try {
-        console.log('📤 Sending request to /api/analysis/generate-images/');
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 300000); // 5 min timeout
-        
-        const response = await fetch('/api/analysis/generate-images/', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': getCookie('csrftoken')
-            },
-            body: JSON.stringify({
-                experiment_ids: selectedExperimentIds,
-                analyses: analyses,
-                global_params: globalParams
-            }),
-            signal: controller.signal
-        });
-        
-        clearTimeout(timeoutId);
-        const data = await response.json();
-        console.log('📥 API Response:', data);
-        
-        if (data.status === 'success') {
-            statusMsg.textContent = `✅ ${data.images.length} images générées en ${data.generation_time.toFixed(1)}s`;
-            statusMsg.style.background = 'rgba(16, 185, 129, 0.1)';
-            statusMsg.style.borderColor = 'rgba(16, 185, 129, 0.3)';
-            statusMsg.style.color = '#047857';
-            
-            analysisState.generatedImages = data.images;
-            displayResults(data.tabs_generated, data.images);
-            document.getElementById('btn-download').style.display = 'block';
-            document.getElementById('initial-message').style.display = 'none';
-        } else {
-            statusMsg.textContent = `⚠️ ${data.message}`;
-            statusMsg.style.background = 'rgba(217, 119, 6, 0.1)';
-            statusMsg.style.borderColor = 'rgba(217, 119, 6, 0.3)';
-            statusMsg.style.color = '#b45309';
-        }
-    } catch (error) {
-        statusMsg.textContent = `❌ Erreur réseau: ${error.message}. Vérifiez la console`;
-        statusMsg.style.background = 'rgba(239, 68, 68, 0.1)';
-        statusMsg.style.borderColor = 'rgba(239, 68, 68, 0.3)';
-        statusMsg.style.color = '#dc2626';
-        console.error('❌ Full error:', error);
+        updateProgress(10);
+        const resp = await fetch('/api/analysis/data/?exp_ids=' + selectedIds.join(','));
+        const data = await resp.json();
+        updateProgress(50);
+
+        if (!data.success) { alert('Erreur: ' + (data.error || 'inconnue')); return; }
+
+        const exps = data.experiments;
+        const vp = data.varying_params;
+
+        updateProgress(70);
+        renderAllTabs(exps, vp);
+        updateProgress(100);
+        document.getElementById('initial-message').style.display = 'none';
+
+    } catch (e) {
+        alert('Erreur: ' + e.message);
     } finally {
         hideProgressBar();
         if (genBtn) genBtn.disabled = false;
-        if (statusMsg.parentNode) {
-            setTimeout(() => statusMsg.style.opacity = '1', 100);
-        }
     }
 }
 
-function displayResults(tabsGenerated, images) {
-    const navContainer = document.getElementById('tabs-navigation');
-    const contentContainer = document.getElementById('tabs-content');
-    
-    navContainer.innerHTML = tabsGenerated.map((tab, idx) => `
-        <button onclick="switchTab('${tab.tab_name}', this)" style="display: flex; align-items: center; gap: 6px; padding: 8px 14px; background: ${idx === 0 ? 'rgba(37, 99, 235, 0.15)' : 'transparent'}; color: ${idx === 0 ? '#1e40af' : '#6b7280'}; border: none; border-radius: 8px; font-weight: 600; font-size: 12px; cursor: pointer; transition: all 0.2s; white-space: nowrap;">
-            ${getTabIcon(tab.tab_name)} ${tab.tab_label} <span style="background: #ef4444; color: white; padding: 2px 6px; border-radius: 999px; font-size: 10px;">${tab.image_count}</span>
-        </button>
-    `).join('');
-    
-    const tabsContent = tabsGenerated.map((tab, idx) => {
-        const tabImages = images.filter(img => img.tab === tab.tab_name);
-        initialiseTabIndex(tab.tab_name, 0);
-        
-        return `
-            <div id="tab-${tab.tab_name}" style="display: ${idx === 0 ? 'block' : 'none'}; animation: fadeIn 0.3s ease-in;">
-                <div style="background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px); border: 1px solid rgba(255, 255, 255, 0.6); border-radius: 16px; padding: 20px; margin-bottom: 16px; box-shadow: 0 8px 32px rgba(31, 38, 135, 0.08);">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                        <h2 style="margin: 0; font-size: 16px; font-weight: 700;">${getTabIcon(tab.tab_name)} ${tab.tab_label}</h2>
-                        <div style="display: flex; gap: 6px; align-items: center;">
-                            <button onclick="prevImage('${tab.tab_name}')" style="padding: 6px 10px; background: #6b7280; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px;">❮</button>
-                            <span style="padding: 6px 12px; background: rgba(37, 99, 235, 0.1); color: #1e40af; border-radius: 6px; font-size: 12px; font-weight: 600;" id="counter-${tab.tab_name}">Image 1 / ${tabImages.length}</span>
-                            <button onclick="nextImage('${tab.tab_name}')" style="padding: 6px 10px; background: #6b7280; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px;">❯</button>
-                        </div>
-                    </div>
-                    
-                    <div id="image-container-${tab.tab_name}" style="margin-bottom: 12px; border-radius: 12px; overflow: hidden; background: #f3f4f6; display: flex; align-items: center; justify-content: center; min-height: 300px;">
-                        ${tabImages.map((img, imgIdx) => `
-                            <img id="image-${tab.tab_name}-${imgIdx}" 
-                                 src="${img.image_base64}" 
-                                 alt="${img.title}"
-                                 style="max-width: 100%; height: auto; display: ${imgIdx === 0 ? 'block' : 'none'}; border-radius: 12px;">
-                        `).join('')}
-                    </div>
-                    
-                    <div style="padding: 12px; background: #f9fafb; border-radius: 8px; margin-bottom: 12px;">
-                        <div style="font-size: 12px; margin-bottom: 6px;"><strong>Titre:</strong> <span id="meta-title-${tab.tab_name}" style="color: #6b7280;"></span></div>
-                        <div style="font-size: 12px;"><strong>Expériences:</strong> <span id="meta-exps-${tab.tab_name}" style="color: #6b7280;"></span></div>
-                    </div>
-                    
-                    <button onclick="downloadImage('${tab.tab_name}', analysisState.currentImageIndex['${tab.tab_name}'])" style="padding: 8px 14px; background: #2563eb; color: white; border: none; border-radius: 6px; font-weight: 600; font-size: 12px; cursor: pointer; transition: all 0.2s;">
-                        💾 Télécharger
-                    </button>
-                </div>
-            </div>
-        `;
-    }).join('');
-    
-    contentContainer.innerHTML = tabsContent;
-    updateTabMetadata(tabsGenerated[0].tab_name, 0);
+function renderAllTabs(exps, varyingParams) {
+    const nav = document.getElementById('tabs-navigation');
+    const content = document.getElementById('tabs-content');
+    const tabs = [
+        { id: 'comparison', label: '⚖️ Comparaison', icon: '⚖️' },
+        { id: 'rsd', label: '📉 RSD', icon: '📉' },
+        { id: 'mixing', label: '🌀 Mélange', icon: '🌀' },
+        { id: 'eigenvalues', label: 'λ Valeurs propres', icon: 'λ' }
+    ];
+
+    nav.innerHTML = tabs.map((t, i) =>
+        '<button onclick="switchTab(\'' + t.id + '\', this)" style="display:flex;align-items:center;gap:6px;padding:8px 14px;background:' + (i === 0 ? 'rgba(37,99,235,0.15)' : 'transparent') + ';color:' + (i === 0 ? '#1e40af' : '#6b7280') + ';border:none;border-radius:8px;font-weight:600;font-size:12px;cursor:pointer;transition:all 0.2s;white-space:nowrap;">' +
+        t.label + '</button>'
+    ).join('');
+
+    content.innerHTML = tabs.map((t, i) =>
+        '<div id="tab-' + t.id + '" style="display:' + (i === 0 ? 'block' : 'none') + ';animation:fadeIn 0.3s ease-in;">' +
+        '<div id="chart-' + t.id + '" style="background:rgba(255,255,255,0.95);border-radius:16px;padding:20px;margin-bottom:16px;box-shadow:0 8px 32px rgba(31,38,135,0.08);min-height:400px;"></div></div>'
+    ).join('');
+
+    renderComparisonChart(exps, varyingParams);
+    renderRSDChart(exps, varyingParams);
+    renderMixingChart(exps, varyingParams);
+    renderEigenvaluesChart(exps, varyingParams);
 }
 
-function initialiseTabIndex(tabName, index) {
-    analysisState.currentImageIndex[tabName] = index;
+function makeLabel(exp, vp) {
+    var parts = [];
+    for (var i = 0; i < vp.length; i++) {
+        var p = vp[i];
+        if (p === 'method') parts.push(exp.method);
+        else if (p === 'n_states') parts.push(exp.n_states + 'c');
+        else if (p === 'nlt') parts.push('nlt=' + exp.nlt);
+        else if (p === 'step_size') parts.push('step=' + exp.step_size);
+        else if (p === 'start_index') parts.push('start=' + exp.start_index);
+        else if (exp.parameters && exp.parameters[p] !== undefined) parts.push(p + '=' + exp.parameters[p]);
+    }
+    return parts.length > 0 ? parts.join(' | ') : (exp.label || exp.name).substring(0, 25);
 }
 
-function updateTabMetadata(tabName, imageIndex) {
-    const images = analysisState.generatedImages.filter(img => img.tab === tabName);
-    if (imageIndex >= images.length) return;
-    const img = images[imageIndex];
-    document.getElementById(`meta-title-${tabName}`).textContent = img.title;
-    document.getElementById(`meta-exps-${tabName}`).textContent = img.experiment_names.join(', ');
+function renderComparisonChart(exps, vp) {
+    var container = document.getElementById('chart-comparison');
+    var labels = exps.map(function(e) { return makeLabel(e, vp); });
+    var trace1 = { x: labels, y: exps.map(function(e) { return e.diagonal_mean; }), name: 'P(rester)', type: 'bar', marker: { color: '#2563eb' } };
+    var trace2 = { x: labels, y: exps.map(function(e) { return e.spectral_gap; }), name: 'Gap spectral', type: 'bar', marker: { color: '#10b981' } };
+    var trace3 = { x: labels, y: exps.map(function(e) { return e.fraction_visited; }), name: 'Visités %', type: 'bar', marker: { color: '#f59e0b' } };
+    var layout = { title: 'Comparaison — P(rester) | Gap | Visités', barmode: 'group', xaxis: { tickangle: -30 }, yaxis: { title: 'Valeur' }, height: 400, margin: { l: 50, r: 20, t: 50, b: 100 } };
+    Plotly.newPlot(container, [trace1, trace2, trace3], layout, { responsive: true });
+}
+
+function renderRSDChart(exps, vp) {
+    var container = document.getElementById('chart-rsd');
+    if (!container) return;
+    if (typeof Plotly === 'undefined') { container.innerHTML = '<p>Plotly not loaded</p>'; return; }
+
+    var dt = 0.01; // secondes par pas
+
+    // Show Markov RSD immediately
+    var traces = [];
+    var hasMarkov = false;
+    for (var i = 0; i < exps.length; i++) {
+        var e = exps[i];
+        var rsd = e.rsd_markov || [];
+        if (rsd.length < 2) continue;
+        hasMarkov = true;
+        var times = [];
+        for (var s = 0; s < rsd.length; s++) times.push(s * dt);
+        var label = makeLabel(e, vp) + ' (Markov)';
+        traces.push({ x: times, y: rsd, mode: 'lines', name: label, line: { width: 2.5 } });
+    }
+    if (!hasMarkov) {
+        container.innerHTML = '<div style="text-align:center;padding:40px;color:#9ca3af;"><p>RSD en cours de calcul...</p></div>';
+        return;
+    }
+
+    // Add placeholder for DEM loading
+    traces.push({ x: [0], y: [0], mode: 'lines', name: 'DEM (chargement...)', line: { dash: 'dot', width: 1.5, color: '#999' }, visible: 'legendonly' });
+
+    try {
+        Plotly.newPlot(container, traces, {
+            title: 'RSD Markov vs DEM', xaxis: { title: 'Temps (s)' }, yaxis: { title: 'RSD (%)' },
+            height: 450, margin: { l: 60, r: 20, t: 50, b: 50 }, legend: { x: 1, xanchor: 'right', y: 1 }
+        }, { responsive: true });
+    } catch(e) { container.innerHTML = '<p style="color:red;">' + e.message + '</p>'; return; }
+
+    // Load DEM RSD for each experiment asynchronously
+    loadDEMRSD(exps, vp, container);
+}
+
+function loadDEMRSD(exps, vp, container) {
+    var colors = ['#ef4444', '#f97316', '#eab308', '#84cc16', '#22c55e', '#14b8a6', '#06b6d4', '#3b82f6'];
+    var dt = 0.01;
+    var completed = 0;
+
+    for (var i = 0; i < exps.length; i++) {
+        (function(idx) {
+            var exp = exps[idx];
+            fetch('/api/rsd-comparison/?exp_id=' + exp.id)
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    if (!data.success || !data.rsd_dem || data.rsd_dem.length < 2) return;
+                    var demTimes = [], demVals = [];
+                    for (var j = 0; j < data.rsd_dem.length; j++) {
+                        demTimes.push(data.rsd_dem[j].t * dt);
+                        demVals.push(data.rsd_dem[j].rsd);
+                    }
+                    var label = makeLabel(exp, vp) + ' (DEM)';
+                    Plotly.addTraces(container, {
+                        x: demTimes, y: demVals, mode: 'lines+markers', name: label,
+                        line: { width: 2, dash: 'dash', color: colors[idx % colors.length] },
+                        marker: { size: 4 }
+                    });
+                    completed++;
+                    var status = document.getElementById('rsd-dem-status');
+                    if (status) status.textContent = 'DEM: ' + completed + '/' + exps.length + ' charges';
+                })
+                .catch(function(e) { console.error('DEM RSD error for exp ' + exp.id + ':', e); });
+        })(i);
+    }
+
+    var statusEl = document.createElement('div');
+    statusEl.id = 'rsd-dem-status';
+    statusEl.style.cssText = 'text-align:center;padding:8px;color:#6b7280;font-size:12px;';
+    statusEl.textContent = 'DEM: chargement en cours...';
+    container.parentNode.insertBefore(statusEl, container.nextSibling);
+}
+
+
+function renderMixingChart(exps, vp) {
+    var container = document.getElementById('chart-mixing');
+    var traces = [];
+    var hasData = false;
+    for (var i = 0; i < exps.length; i++) {
+        var e = exps[i];
+        var hist = e.entropy_history || [];
+        if (hist.length === 0) continue;
+        hasData = true;
+        var steps = [];
+        for (var s = 0; s < hist.length; s++) steps.push(s + 1);
+        traces.push({ x: steps, y: hist, mode: 'lines+markers', name: makeLabel(e, vp), line: { width: 2 }, marker: { size: 4 } });
+    }
+    if (!hasData) {
+        container.innerHTML = '<div style="text-align:center;padding:40px;color:#9ca3af;"><h3>🌀 Évolution de l\'entropie de mélange</h3><p>Aucune donnée d\'entropie disponible.</p><p style="font-size:12px;">La table RSDResult n\'a pas encore été peuplée. Lancez <code>sync_bucket</code> pour importer les résultats.</p></div>';
+        return;
+    }
+    var layout = { title: 'Entropie de mélange — Comparaison Markov', xaxis: { title: 'Pas de temps' }, yaxis: { title: 'Entropie' }, height: 400, margin: { l: 50, r: 20, t: 50, b: 50 }, legend: { x: 1, xanchor: 'right', y: 1 } };
+    Plotly.newPlot(container, traces, layout, { responsive: true });
+}
+
+function renderEigenvaluesChart(exps, vp) {
+    var container = document.getElementById('chart-eigenvalues');
+    var labels = exps.map(function(e) { return makeLabel(e, vp); });
+    var trace1 = { x: labels, y: exps.map(function(e) { return e.eigenvalue_2; }), name: '|λ₂|', type: 'bar', marker: { color: '#8b5cf6' } };
+    var trace2 = { x: labels, y: exps.map(function(e) { return e.spectral_gap; }), name: 'Gap spectral', type: 'bar', marker: { color: '#06b6d4' } };
+    var layout = { title: 'Valeurs propres — λ₂ et Gap spectral', barmode: 'group', xaxis: { tickangle: -30 }, yaxis: { title: 'Valeur' }, height: 400, margin: { l: 50, r: 20, t: 50, b: 100 } };
+    Plotly.newPlot(container, [trace1, trace2], layout, { responsive: true });
 }
 
 function switchTab(tabName, button) {
-    document.querySelectorAll('[id^="tab-"]').forEach(tab => tab.style.display = 'none');
-    document.querySelectorAll('[id^="tabs-navigation"] button').forEach(btn => {
-        btn.style.background = 'transparent';
-        btn.style.color = '#6b7280';
-    });
-    
-    const tabContent = document.getElementById(`tab-${tabName}`);
-    if (tabContent) {
-        tabContent.style.display = 'block';
-        button.style.background = 'rgba(37, 99, 235, 0.15)';
-        button.style.color = '#1e40af';
-        updateTabMetadata(tabName, analysisState.currentImageIndex[tabName] || 0);
-    }
+    document.querySelectorAll('[id^="tab-"]').forEach(function(t) { t.style.display = 'none'; });
+    document.querySelectorAll('#tabs-navigation button').forEach(function(btn) { btn.style.background = 'transparent'; btn.style.color = '#6b7280'; });
+    var el = document.getElementById('tab-' + tabName);
+    if (el) { el.style.display = 'block'; }
+    if (button) { button.style.background = 'rgba(37,99,235,0.15)'; button.style.color = '#1e40af'; }
+    if (typeof Plotly !== 'undefined') { Plotly.Plots.resize(document.getElementById('chart-' + tabName)); }
 }
 
-function nextImage(tabName) {
-    const images = analysisState.generatedImages.filter(img => img.tab === tabName);
-    if (images.length === 0) return;
-    analysisState.currentImageIndex[tabName] = (analysisState.currentImageIndex[tabName] + 1) % images.length;
-    displayImage(tabName, analysisState.currentImageIndex[tabName]);
-}
-
-function prevImage(tabName) {
-    const images = analysisState.generatedImages.filter(img => img.tab === tabName);
-    if (images.length === 0) return;
-    analysisState.currentImageIndex[tabName] = (analysisState.currentImageIndex[tabName] - 1 + images.length) % images.length;
-    displayImage(tabName, analysisState.currentImageIndex[tabName]);
-}
-
-function displayImage(tabName, imageIndex) {
-    const images = analysisState.generatedImages.filter(img => img.tab === tabName);
-    if (imageIndex >= images.length) return;
-    
-    const container = document.getElementById(`image-container-${tabName}`);
-    container.querySelectorAll('img').forEach(img => img.style.display = 'none');
-    document.getElementById(`image-${tabName}-${imageIndex}`).style.display = 'block';
-    document.getElementById(`counter-${tabName}`).textContent = `Image ${imageIndex + 1} / ${images.length}`;
-    updateTabMetadata(tabName, imageIndex);
-}
-
-function downloadImage(tabName, imageIndex) {
-    const images = analysisState.generatedImages.filter(img => img.tab === tabName);
-    if (imageIndex >= images.length) return;
-    const img = images[imageIndex];
-    const link = document.createElement('a');
-    link.href = img.image_base64;
-    link.download = `${img.type}_${img.experiment_names[0] || 'image'}.png`;
-    link.click();
-}
-
-function downloadAllImages() {
-    analysisState.generatedImages.forEach((img, idx) => {
-        setTimeout(() => {
-            const link = document.createElement('a');
-            link.href = img.image_base64;
-            link.download = `${idx + 1}_${img.type}_${img.experiment_names[0] || 'image'}.png`;
-            link.click();
-        }, idx * 200);
-    });
-}
-
-function showProgressBar() {
-    document.getElementById('generation-progress').style.display = 'block';
-    updateProgress(0);
-}
-
-function hideProgressBar() {
-    document.getElementById('generation-progress').style.display = 'none';
-}
-
-function updateProgress(percent) {
-    document.getElementById('progress-fill').style.width = percent + '%';
-    document.getElementById('progress-text').textContent = percent + '%';
-}
+function showProgressBar() { document.getElementById('generation-progress').style.display = 'block'; updateProgress(0); }
+function hideProgressBar() { document.getElementById('generation-progress').style.display = 'none'; }
+function updateProgress(pct) { document.getElementById('progress-fill').style.width = pct + '%'; document.getElementById('progress-text').textContent = pct + '%'; }
 
 function getCookie(name) {
-    let cookieValue = null;
+    var v = null;
     if (document.cookie && document.cookie !== '') {
-        const cookies = document.cookie.split(';');
-        for (let i = 0; i < cookies.length; i++) {
-            const cookie = cookies[i].trim();
-            if (cookie.substring(0, name.length + 1) === (name + '=')) {
-                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-                break;
-            }
+        var cks = document.cookie.split(';');
+        for (var i = 0; i < cks.length; i++) {
+            var c = cks[i].trim();
+            if (c.substring(0, name.length + 1) === (name + '=')) { v = decodeURIComponent(c.substring(name.length + 1)); break; }
         }
     }
-    return cookieValue;
-}
-
-function getTabIcon(tabName) {
-    const icons = {
-        'experiments': '📊',
-        'compare': '⚖️',
-        'rsd': '📉',
-        'mixing': '🌀',
-        'eigenvalues': '🔢',
-        'dem_markov': '🔬'
-    };
-    return icons[tabName] || '📈';
+    return v;
 }
 
 function showInfoModal() {
-    alert('ℹ️ Analyse Comparative Complète\n\n' +
-          'Cette interface permet de:\n' +
-          '• Sélectionner plusieurs expériences avec filtres avancés\n' +
-          '• Choisir plusieurs types d\'analyses\n' +
-          '• Générer des visualisations matplotlib\n' +
-          '• Télécharger les images résultantes\n\n' +
-          'Les analyses single-experiment génèrent une image par expérience.\n' +
-          'Les analyses multi-experiment comparent toutes les expériences sélectionnées.');
+    alert('Analyse Comparative\n\nSélectionnez des expériences puis cliquez GÉNÉRER.\nLes graphiques Plotly sont interactifs.\nLes labels affichent les paramètres qui varient entre les expériences sélectionnées.');
 }
 </script>
 

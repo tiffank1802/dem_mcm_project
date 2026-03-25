@@ -1,0 +1,181 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="fr" class="h-full">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}DEM MCM Results{% endblock %} — Markov Mixing</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- HTMX -->
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+
+    <!-- Alpine.js -->
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
+    <!-- Plotly -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+
+    <!-- Glass Navigation CSS -->
+    <link rel="stylesheet" href="{% static 'markov/css/glass-nav.css' %}">
+    <!-- Glass Effects CSS (new) -->
+    <link rel="stylesheet" href="{% static 'markov/css/glass-effects.css' %}">
+
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #f0f9ff 0%, #f3e8ff 100%);
+            background-attachment: fixed;
+        }
+
+        [data-theme="dark"] body {
+            background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
+        }
+
+        main {
+            margin-top: 80px;
+            padding: 2rem;
+            max-width: 1400px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .page-title {
+            font-size: 2.5rem;
+            font-weight: 800;
+            margin-bottom: 1rem;
+            background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .page-subtitle {
+            font-size: 1.1rem;
+            opacity: 0.7;
+            margin-bottom: 2rem;
+            max-width: 600px;
+        }
+
+        .section-header {
+            margin-top: 2.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .section-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        /* Filter bar */
+        .filters-wrapper {
+            margin-bottom: 2rem;
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .filter-btn {
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            border: 2px solid var(--glass-border);
+            background: var(--glass-bg);
+            backdrop-filter: blur(10px);
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        .filter-btn:hover,
+        .filter-btn.active {
+            background: var(--accent-color);
+            border-color: var(--accent-color);
+            color: white;
+        }
+
+        /* Footer */
+        footer {
+            margin-top: 4rem;
+            padding: 2rem;
+            text-align: center;
+            opacity: 0.5;
+            font-size: 0.9rem;
+        }
+    </style>
+
+    {% block extra_head %}{% endblock %}
+</head>
+
+<body class="h-full">
+
+    <!-- ═══ NAVIGATION LIQUID GLASS ═══ -->
+    <nav class="nav-liquid">
+        <div class="nav-liquid-content">
+            <div class="flex items-center gap-2">
+                <span class="text-2xl">🔬</span>
+                <h1 class="text-lg font-bold text-gray-900">DEM MCM Results</h1>
+            </div>
+
+            <div class="nav-links">
+                <!-- Dashboard -->
+                <a href="{% url 'markov:dashboard' %}" 
+                        class="nav-item {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
+                    <svg viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M10.0954 18.1892C10.2251 15.9585 11.9923 14.2726 14.1987 13.9192C16.3772 13.5703 19.105 13.0602 21.2305 12.4239C23.9034 11.6238 27.5286 10.0539 29.8162 9.01576C31.2034 8.38626 32.7966 8.38626 34.1838 9.01576C36.4714 10.0539 40.0966 11.6238 42.7695 12.4239C44.895 13.0602 47.6228 13.5703 49.8013 13.9192C52.0077 14.2726 53.7749 15.9585 53.9046 18.1892C54.418 27.02 53.5497 48.9163 33.3725 55.5791C32.4916 55.87 31.5084 55.87 30.6275 55.5791C10.4503 48.9163 9.58202 27.02 10.0954 18.1892Z" fill="currentColor"></path>
+                    </svg>
+                    Dashboard
+                </a>
+
+                <!-- Results Gallery -->
+                <a href="{% url 'markov:results' %}" 
+                        class="nav-item {% if request.resolver_match.url_name == 'results' %}active{% endif %}">
+                    <svg fill="currentColor" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 52 52">
+                        <g><path d="M44.9,2H7.1C4.3,2,2,4.3,2,7.1v37.7C2,47.7,4.3,50,7.1,50h37.7c2.8,0,5.1-2.3,5.1-5.1V7.1C50,4.3,47.7,2,44.9,2z M15.7,39.7c0,0.9-0.8,1.7-1.7,1.7h-1.7c-0.9,0-1.7-0.8-1.7-1.7v-9.4c0-0.9,0.8-1.7,1.7-1.7H14 c0.9,0,1.7,0.8,1.7,1.7V39.7z M24.3,39.7c0,0.9-0.8,1.7-1.7,1.7h-1.7c-0.9,0-1.7-0.8-1.7-1.7V17.4c0-0.9,0.8-1.7,1.7-1.7h1.7 c0.9,0,1.7,0.8,1.7,1.7V39.7z M32.9,39.7c0,0.9-0.8,1.7-1.7,1.7h-1.7c-0.9,0-1.7-0.8-1.7-1.7V12.3c0-0.9,0.8-1.7,1.7-1.7h1.7 c0.9,0,1.7,0.8,1.7,1.7V39.7z M41.4,39.7c0,0.9-0.8,1.7-1.7,1.7H38c-0.9,0-1.7-0.8-1.7-1.7V23.4c0-0.9,0.8-1.7,1.7-1.7h1.7 c0.9,0,1.7,0.8,1.7,1.7V39.7z"></path></g>
+                    </svg>
+                    Résultats
+                </a>
+
+                <!-- Gallery -->
+                <a href="{% url 'markov:gallery' %}" 
+                        class="nav-item {% if request.resolver_match.url_name == 'gallery' %}active{% endif %}">
+                    <svg fill="currentColor" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                        <path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"></path>
+                    </svg>
+                    Galerie
+                </a>
+
+                <!-- Settings -->
+                <a href="/admin/" class="nav-item">
+                    <svg fill="currentColor" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                        <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"></path>
+                    </svg>
+                    Admin
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- ═══ MAIN CONTENT ═══ -->
+    <main>
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- ═══ FOOTER ═══ -->
+    <footer>
+        <p>🔬 DEM MCM Analysis Tool — Markov Chain Mixing © 2025</p>
+    </footer>
+
+    {% block extra_scripts %}{% endblock %}
+    
+    <!-- Glass Displacement Navigation Script -->
+    <script src="{% static 'markov/js/glass-displacement.js' %}"></script>
+</body>
+</html>

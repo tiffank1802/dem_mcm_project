@@ -1,0 +1,439 @@
+/* ============================================
+   LIQUID GLASS CARD SYSTEM
+   Pour les cartes des méthodes de partitionnement
+   ============================================ */
+
+:root {
+    --liquid-glass-bg: light-dark(
+        hsl(0 0% 100% / 0.08),
+        hsl(0 0% 100% / 0.04)
+    );
+    --liquid-glass-border: light-dark(
+        hsl(0 0% 100% / 0.25),
+        hsl(0 0% 100% / 0.1)
+    );
+    --liquid-glass-shadow-1: rgba(255, 255, 255, 0.192);
+    --liquid-glass-shadow-2: rgba(255, 255, 255, 0.274);
+    --liquid-glass-shadow-3: rgba(0, 0, 0, 0.164);
+    --liquid-glass-glow: light-dark(
+        rgba(99, 102, 241, 0.15),
+        rgba(99, 102, 241, 0.25)
+    );
+    --liquid-glass-speed: 0.5s;
+}
+
+/* Masquer les filtres SVG (ne pas afficher dans le DOM) */
+.svg-filters-liquid-glass {
+    position: absolute;
+    width: 0;
+    height: 0;
+    overflow: hidden;
+    pointer-events: none;
+}
+
+/* ============================================
+   CARD AVEC LIQUID GLASS
+   ============================================ */
+
+.method-card-liquid {
+    position: relative;
+    background: var(--liquid-glass-bg);
+    backdrop-filter: url(#liquid-glass-method) blur(15px) saturate(1.4) brightness(1.05);
+    -webkit-backdrop-filter: blur(15px) saturate(1.4) brightness(1.05);
+    border: 1px solid var(--liquid-glass-border);
+    border-radius: 20px;
+    padding: 2rem;
+    transition: all var(--liquid-glass-speed) ease-out;
+    overflow: visible;
+    
+    /* Ombres intérieures liquides */
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.3),
+        inset 0 -1px 0 rgba(255, 255, 255, 0.05),
+        inset 0 0 20px var(--liquid-glass-shadow-1),
+        inset 0 0 5px var(--liquid-glass-shadow-2),
+        /* Ombre extérieure douce */
+        0 5px 5px var(--liquid-glass-shadow-3),
+        0 8px 32px rgba(0, 0, 0, 0.08),
+        0 20px 60px rgba(0, 0, 0, 0.04);
+}
+
+/* Reflet liquide supérieur */
+.method-card-liquid::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 50%;
+    border-radius: 20px 20px 50% 50%;
+    background: linear-gradient(
+        180deg,
+        rgba(255, 255, 255, 0.15) 0%,
+        rgba(255, 255, 255, 0.05) 40%,
+        transparent 100%
+    );
+    pointer-events: none;
+    z-index: 1;
+}
+
+/* Bord lumineux animé */
+.method-card-liquid::after {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    border-radius: 21px;
+    background: linear-gradient(
+        135deg,
+        rgba(255, 255, 255, 0.3) 0%,
+        transparent 30%,
+        transparent 70%,
+        rgba(255, 255, 255, 0.1) 100%
+    );
+    mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    mask-composite: exclude;
+    -webkit-mask-composite: xor;
+    padding: 1px;
+    pointer-events: none;
+    z-index: 2;
+    transition: opacity 0.3s;
+}
+
+/* État hover du liquid glass card */
+.method-card-liquid:hover {
+    background: light-dark(
+        hsl(0 0% 100% / 0.12),
+        hsl(0 0% 100% / 0.08)
+    );
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.4),
+        inset 0 -1px 0 rgba(255, 255, 255, 0.08),
+        inset 0 0 30px rgba(255, 255, 255, 0.25),
+        inset 0 0 8px rgba(255, 255, 255, 0.35),
+        0 5px 5px var(--liquid-glass-shadow-3),
+        0 12px 40px rgba(0, 0, 0, 0.1),
+        0 0 30px var(--liquid-glass-glow);
+    transform: translateY(-2px) scale(1.02);
+    border-color: rgba(255, 255, 255, 0.4);
+}
+
+.method-card-liquid:hover::after {
+    background: linear-gradient(
+        135deg,
+        rgba(255, 255, 255, 0.5) 0%,
+        rgba(99, 102, 241, 0.2) 30%,
+        transparent 60%,
+        rgba(255, 255, 255, 0.15) 100%
+    );
+}
+
+/* Animation au hover - reflet supérieur plus prononcé */
+.method-card-liquid:hover::before {
+    background: linear-gradient(
+        180deg,
+        rgba(255, 255, 255, 0.2) 0%,
+        rgba(255, 255, 255, 0.08) 40%,
+        transparent 100%
+    );
+}
+
+/* ============================================
+   CONTENU DU CARD
+   ============================================ */
+
+.method-card-liquid .card-header {
+    position: relative;
+    z-index: 3;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.method-card-liquid .card-icon {
+    font-size: 2.5rem;
+    width: 60px;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 15px;
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+    border: 1px solid var(--liquid-glass-border);
+    box-shadow:
+        inset 0 0 15px rgba(255, 255, 255, 0.2),
+        inset 0 0 5px rgba(255, 255, 255, 0.3),
+        0 4px 12px rgba(0, 0, 0, 0.15);
+    transition: all 0.3s ease;
+}
+
+.method-card-liquid:hover .card-icon {
+    box-shadow:
+        inset 0 0 20px rgba(255, 255, 255, 0.3),
+        inset 0 0 8px rgba(255, 255, 255, 0.5),
+        0 6px 20px rgba(0, 0, 0, 0.2),
+        0 0 20px rgba(99, 102, 241, 0.2);
+    transform: translateY(-2px) scale(1.1);
+}
+
+.method-card-liquid .card-title {
+    margin: 0;
+    font-size: 1.4rem;
+    font-weight: 700;
+    line-height: 1.2;
+    position: relative;
+    z-index: 3;
+}
+
+.method-card-liquid .card-subtitle {
+    margin: 0;
+    font-size: 0.9rem;
+    opacity: 0.7;
+    position: relative;
+    z-index: 3;
+}
+
+/* Contenu du card */
+.method-card-liquid .card-content {
+    position: relative;
+    z-index: 3;
+    display: grid;
+    gap: 1.25rem;
+}
+
+/* Métrique */
+.method-card-liquid .metric {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.5rem;
+    padding: 0.75rem;
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    transition: all 0.3s ease;
+}
+
+.method-card-liquid:hover .metric {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+.method-card-liquid .metric-label {
+    font-size: 0.8rem;
+    opacity: 0.6;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.method-card-liquid .metric-value {
+    font-size: 1.25rem;
+    font-weight: 700;
+    background: linear-gradient(
+        135deg,
+        canvasText 0%,
+        color-mix(in oklch, canvasText, transparent 30%) 100%
+    );
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+/* Description */
+.method-card-liquid .card-description {
+    font-size: 0.95rem;
+    line-height: 1.5;
+    opacity: 0.8;
+    position: relative;
+    z-index: 3;
+}
+
+/* Badge */
+.method-card-liquid .method-badge {
+    display: inline-block;
+    padding: 0.5rem 1rem;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    transition: all 0.3s ease;
+    position: relative;
+    z-index: 3;
+}
+
+.method-card-liquid:hover .method-badge {
+    background: rgba(99, 102, 241, 0.2);
+    border-color: rgba(99, 102, 241, 0.5);
+    box-shadow: 0 0 15px rgba(99, 102, 241, 0.2);
+}
+
+/* Button */
+.method-card-liquid .card-button {
+    position: relative;
+    z-index: 3;
+    padding: 0.75rem 1.5rem;
+    border-radius: 12px;
+    border: 1px solid var(--liquid-glass-border);
+    background: rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(10px);
+    color: inherit;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-decoration: none;
+    display: inline-block;
+    text-align: center;
+}
+
+.method-card-liquid .card-button:hover {
+    background: rgba(99, 102, 241, 0.15);
+    border-color: rgba(99, 102, 241, 0.5);
+    box-shadow: 0 0 20px rgba(99, 102, 241, 0.3);
+    transform: translateY(-2px);
+}
+
+/* ============================================
+   GRID DE CARDS
+   ============================================ */
+
+.methods-grid-liquid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 2rem;
+    padding: 2rem 0;
+}
+
+@media (max-width: 768px) {
+    .methods-grid-liquid {
+        grid-template-columns: 1fr;
+        gap: 1.5rem;
+    }
+}
+
+/* ============================================
+   ANIMATIONS
+   ============================================ */
+
+@keyframes liquid-shimmer {
+    0% {
+        box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 0.3),
+            inset 0 0 20px rgba(255, 255, 255, 0.15),
+            0 5px 5px rgba(0, 0, 0, 0.1);
+    }
+    50% {
+        box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 0.4),
+            inset 0 0 25px rgba(255, 255, 255, 0.25),
+            0 5px 5px rgba(0, 0, 0, 0.1);
+    }
+    100% {
+        box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 0.3),
+            inset 0 0 20px rgba(255, 255, 255, 0.15),
+            0 5px 5px rgba(0, 0, 0, 0.1);
+    }
+}
+
+.method-card-liquid {
+    animation: liquid-shimmer 3s ease-in-out infinite;
+}
+
+/* Désactiver l'animation sur hover pour éviter les scintillements */
+.method-card-liquid:hover {
+    animation: none;
+}
+
+/* ============================================
+   MODES SOMBRES/CLAIRS
+   ============================================ */
+
+@media (prefers-color-scheme: dark) {
+    .method-card-liquid {
+        background: rgba(20, 20, 40, 0.5);
+    }
+
+    .method-card-liquid .metric {
+        background: rgba(255, 255, 255, 0.02);
+    }
+
+    .method-card-liquid .card-button {
+        background: rgba(99, 102, 241, 0.08);
+    }
+}
+
+@media (prefers-color-scheme: light) {
+    .method-card-liquid {
+        background: rgba(255, 255, 255, 0.6);
+    }
+
+    .method-card-liquid .metric {
+        background: rgba(99, 102, 241, 0.05);
+    }
+}
+
+/* ============================================
+   ACCESSIBILITÉ
+   ============================================ */
+
+@media (prefers-reduced-motion: reduce) {
+    .method-card-liquid,
+    .method-card-liquid .card-icon,
+    .method-card-liquid .card-button {
+        animation: none !important;
+        transition: none !important;
+    }
+}
+
+/* Focus visible pour le clavier */
+.method-card-liquid:focus-visible,
+.method-card-liquid .card-button:focus-visible {
+    outline: 2px solid rgba(99, 102, 241, 0.8);
+    outline-offset: 2px;
+}
+
+/* ============================================
+   ÉTATS SPÉCIAUX
+   ============================================ */
+
+/* Card active/sélectionnée */
+.method-card-liquid.active {
+    background: light-dark(
+        hsl(0 0% 100% / 0.15),
+        hsl(0 0% 100% / 0.1)
+    );
+    border-color: rgba(99, 102, 241, 0.6);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.4),
+        inset 0 0 30px rgba(99, 102, 241, 0.15),
+        0 0 30px rgba(99, 102, 241, 0.2);
+}
+
+/* Card disabled */
+.method-card-liquid.disabled {
+    opacity: 0.5;
+    pointer-events: none;
+    cursor: not-allowed;
+}
+
+/* ============================================
+   COMPATIBILITÉ NAVIGATEURS
+   ============================================ */
+
+/* Pour les navigateurs qui ne supportent pas backdrop-filter: url() */
+@supports not (backdrop-filter: url(#test)) {
+    .method-card-liquid {
+        backdrop-filter: blur(15px) saturate(1.4) brightness(1.05);
+    }
+}
+
+/* Pour Safari */
+@supports (-webkit-backdrop-filter: blur(1px)) {
+    .method-card-liquid {
+        -webkit-backdrop-filter: blur(15px) saturate(1.4) brightness(1.05);
+    }
+}

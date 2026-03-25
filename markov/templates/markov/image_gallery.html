@@ -1,0 +1,121 @@
+{% extends 'markov/results_base.html' %}
+{% load static %}
+
+{% block title %}Image Gallery{% endblock %}
+
+{% block content %}
+
+<header>
+    <h1 class="page-title">🖼️ Galerie d'Images</h1>
+    <p class="page-subtitle">
+        Explorrez votre collection d'images avec des effets vitrés et des animations fluides.
+        Chaque image affiche des détails enrichis au survol.
+    </p>
+</header>
+
+<!-- ═══ IMAGE GALLERY GRID ═══ -->
+<section class="section-header">
+    <div class="section-title">🌅 Collection d'images</div>
+</section>
+
+<div class="gallery-grid">
+    {% for image in images %}
+    <div class="glass-card gallery-item" onclick="expandImage(this)">
+        <img src="{{ image.url }}" alt="{{ image.title }}" class="gallery-image">
+        <div class="gallery-overlay">
+            <div class="gallery-info">
+                <h3 class="gallery-title">{{ image.title }}</h3>
+                <p class="gallery-description">{{ image.description }}</p>
+            </div>
+        </div>
+    </div>
+    {% empty %}
+    <div style="grid-column: 1 / -1; text-align: center; padding: 3rem; opacity: 0.5;">
+        <p style="font-size: 2rem; margin-bottom: 1rem;">🖼️</p>
+        <p>Aucune image disponible</p>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- ═══ FLOATING IMAGE DISPLAY ═══ -->
+<section class="section-header" style="margin-top: 3rem;">
+    <div class="section-title">✨ Images en avant</div>
+</section>
+
+<div class="product-grid">
+    {% for image in featured_images %}
+    <div class="glass-card product-card">
+        <div class="product-image-container floating-image">
+            <img src="{{ image.url }}" alt="{{ image.title }}">
+        </div>
+        <div class="product-info">
+            <h3 class="product-name">{{ image.title }}</h3>
+            <p class="product-description">{{ image.description }}</p>
+            <div class="product-footer">
+                <span class="product-stock">📅 {{ image.created_at|date:"d/m/Y" }}</span>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- ═══ MASONRY LAYOUT ═══ -->
+<section class="section-header">
+    <div class="section-title">🎨 Vue Masonry</div>
+</section>
+
+<div class="gallery-masonry">
+    {% for image in images %}
+    <div class="glass-card gallery-masonry-item">
+        <img src="{{ image.url }}" alt="{{ image.title }}" class="gallery-masonry-image">
+        <div class="gallery-overlay">
+            <div class="gallery-info">
+                <h3 class="gallery-title">{{ image.title }}</h3>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- ═══ IMAGE MODAL ═══ -->
+<div id="imageModal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 1000; backdrop-filter: blur(5px); display: flex; align-items: center; justify-content: center;">
+    <div class="glass-card" style="position: relative; max-width: 90vw; max-height: 90vh; padding: 0; overflow: auto;">
+        <button onclick="closeModal()" style="position: absolute; top: 1rem; right: 1rem; background: rgba(255,255,255,0.2); backdrop-filter: blur(10px); border: none; border-radius: 50%; width: 40px; height: 40px; cursor: pointer; font-size: 1.5rem; z-index: 10;">
+            ✕
+        </button>
+        <img id="modalImage" src="" alt="Expanded image" style="width: 100%; height: auto; display: block;">
+        <div style="padding: 2rem;">
+            <h2 id="modalTitle" style="margin: 0 0 0.5rem;"></h2>
+            <p id="modalDesc" style="opacity: 0.7;"></p>
+        </div>
+    </div>
+</div>
+
+<script>
+    function expandImage(element) {
+        const img = element.querySelector('img');
+        const title = element.querySelector('.gallery-title')?.textContent || 'Image';
+        const desc = element.querySelector('.gallery-description')?.textContent || '';
+
+        document.getElementById('modalImage').src = img.src;
+        document.getElementById('modalTitle').textContent = title;
+        document.getElementById('modalDesc').textContent = desc;
+        document.getElementById('imageModal').style.display = 'flex';
+    }
+
+    function closeModal() {
+        document.getElementById('imageModal').style.display = 'none';
+    }
+
+    // Close modal on background click
+    document.getElementById('imageModal').addEventListener('click', (e) => {
+        if (e.target.id === 'imageModal') closeModal();
+    });
+
+    // Close modal on Escape
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') closeModal();
+    });
+</script>
+
+{% endblock %}

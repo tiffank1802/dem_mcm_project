@@ -1,11 +1,11 @@
 {% extends "markov/base.html" %}
-{% block title %}Trame 3D - Partitionnement{% endblock %}
+{% block title %}Visualisation du Partitionnement{% endblock %}
 
 {% block content %}
 <div class="fade-in">
     <div class="mb-8">
-        <h1 class="text-3xl font-bold text-gray-900 mb-2">🔬 Visualisation 3D Trame — Partitionnement</h1>
-        <p class="text-gray-600">Rendu 3D interactif via <strong>vtk.js</strong> (même moteur que Trame/Kitware). Maillages de frontières + particules colorées par cellule.</p>
+        <h1 class="text-3xl font-bold text-gray-900 mb-2">🔬 Visualisation 3D — Partitionnement</h1>
+        <p class="text-gray-600">Rendu 3D via <strong>vtk.js</strong> (moteur Trame/Kitware). Données chargées depuis la base de données.</p>
     </div>
 
     <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
@@ -14,57 +14,58 @@
             <div class="glass-card p-6 sticky top-6">
                 <h2 class="text-lg font-bold text-gray-800 mb-4">⚙️ Paramètres</h2>
 
+                <!-- 1. Choisir la méthode -->
                 <div class="mb-6">
-                    <label class="text-sm font-semibold text-gray-700 block mb-2">Méthode</label>
-                    <select id="method-select" class="w-full px-4 py-2 border border-gray-300 rounded-lg bg-white" onchange="changeMethod()">
+                    <label class="text-sm font-semibold text-gray-700 block mb-2">1. Méthode</label>
+                    <select id="method-select" class="w-full px-4 py-2 border border-gray-300 rounded-lg bg-white" onchange="onMethodChange()">
                         <option value="cartesian">Cartésien</option>
                         <option value="cylindrical">Cylindrique</option>
-                        <option value="voronoi" selected>Voronoï</option>
+                        <option value="voronoi">Voronoï</option>
                         <option value="quantile">Quantile</option>
                         <option value="octree">Octree</option>
+                        <option value="physics">Physics-Aware</option>
                     </select>
                 </div>
 
-                <div id="method-description" class="p-3 bg-blue-50 rounded-lg border border-blue-200 mb-6 text-xs text-gray-700"></div>
-                <div id="parameters-container" class="space-y-4 mb-6"></div>
-
-                <div class="mb-6 border-t pt-4">
-                    <label class="text-sm font-semibold text-gray-700 block mb-2">🔬 Snapshot DEM</label>
-                    <div class="flex gap-2">
-                        <input type="number" id="file-index" value="100" min="0" max="1000" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg">
-                        <button onclick="generateVisualization()" class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600">Charger</button>
-                    </div>
+                <!-- 2. Choisir l'expérience -->
+                <div class="mb-6">
+                    <label class="text-sm font-semibold text-gray-700 block mb-2">2. Expérience</label>
+                    <select id="exp-select" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white" onchange="onExpChange()">
+                        <option value="">-- Choisir une expérience --</option>
+                    </select>
+                    <p id="exp-count" class="text-xs text-gray-500 mt-1"></p>
                 </div>
 
-                <button onclick="generateVisualization()" class="w-full px-6 py-3 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-lg font-semibold hover:shadow-lg transition">
-                    🎬 Générer avec Trame/vtk.js
-                </button>
+                <!-- Description méthode -->
+                <div id="method-description" class="p-3 bg-blue-50 rounded-lg border border-blue-200 mb-6 text-xs text-gray-700"></div>
+
+                <!-- Paramètres affichés (lecture seule) -->
+                <div id="params-display" class="mb-6 hidden">
+                    <label class="text-sm font-semibold text-gray-700 block mb-2">Paramètres</label>
+                    <div id="params-content" class="p-3 bg-gray-50 rounded-lg border text-xs space-y-1"></div>
+                </div>
 
                 <!-- Stats -->
-                <div id="stats-container" class="mt-6 p-4 bg-gray-50 rounded-lg border border-gray-200 hidden">
+                <div id="stats-container" class="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200 hidden">
                     <h3 class="text-sm font-semibold text-gray-700 mb-3">📊 Statistiques</h3>
                     <div id="stats-content" class="space-y-2 text-xs"></div>
                 </div>
 
-                <!-- Légende couleurs -->
-                <div id="legend-container" class="mt-6 p-4 bg-gray-50 rounded-lg border border-gray-200 hidden">
-                    <h3 class="text-sm font-semibold text-gray-700 mb-3">🎨 Contrôles</h3>
+                <!-- Contrôles rendu -->
+                <div id="render-controls" class="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200 hidden">
+                    <h3 class="text-sm font-semibold text-gray-700 mb-3">🎨 Rendu</h3>
                     <div class="space-y-2 text-xs">
-                        <div class="flex items-center gap-2">
-                            <input type="checkbox" id="show-particles" checked onchange="toggleLayer('particles')">
-                            <label for="show-particles">Particules</label>
-                        </div>
                         <div class="flex items-center gap-2">
                             <input type="checkbox" id="show-meshes" checked onchange="toggleLayer('meshes')">
                             <label for="show-meshes">Frontières</label>
                         </div>
                         <div class="flex items-center gap-2">
-                            <label>Opacité maillages:</label>
+                            <label>Opacité:</label>
                             <input type="range" id="mesh-opacity" min="0" max="100" value="20" class="w-20" onchange="updateMeshOpacity()">
                         </div>
                         <div class="flex items-center gap-2">
-                            <label>Taille particules:</label>
-                            <input type="range" id="point-size" min="1" max="10" value="3" class="w-20" onchange="updatePointSize()">
+                            <input type="checkbox" id="show-bbox" checked onchange="toggleLayer('bbox')">
+                            <label for="show-bbox">Boîte englobante</label>
                         </div>
                     </div>
                 </div>
@@ -75,7 +76,7 @@
         <div class="lg:col-span-3">
             <div class="glass-card p-6">
                 <div class="flex justify-between items-center mb-4">
-                    <h2 class="text-lg font-bold text-gray-800">3D Viewer — vtk.js (Trame)</h2>
+                    <h2 class="text-lg font-bold text-gray-800">3D Viewer — vtk.js</h2>
                     <div class="flex gap-2">
                         <button onclick="resetCamera()" class="px-3 py-1 text-xs bg-gray-200 rounded hover:bg-gray-300">Reset Camera</button>
                         <button onclick="toggleWireframe()" class="px-3 py-1 text-xs bg-gray-200 rounded hover:bg-gray-300">Wireframe</button>
@@ -88,216 +89,140 @@
                             <p>Initialisation vtk.js...</p>
                         </div>
                     </div>
+                    <div id="vtk-placeholder" class="absolute inset-0 flex items-center justify-center z-5" style="display:none;">
+                        <div class="text-center text-gray-400">
+                            <p class="text-xl mb-2">🔬</p>
+                            <p>Sélectionnez une méthode puis une expérience</p>
+                        </div>
+                    </div>
                 </div>
             </div>
 
-            <!-- Histogram -->
-            <div class="glass-card p-6 mt-6">
-                <h2 class="text-lg font-bold text-gray-800 mb-4">📈 Distribution des Populations</h2>
-                <div id="population-histogram" style="height: 300px;"></div>
+            <!-- Matrice info -->
+            <div id="matrix-info" class="glass-card p-6 mt-6 hidden">
+                <h2 class="text-lg font-bold text-gray-800 mb-4">📈 Diagnostics de la Matrice</h2>
+                <div id="matrix-content" class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm"></div>
             </div>
         </div>
     </div>
 </div>
 
-<!-- vtk.js from CDN (same as Trame uses) -->
+<!-- vtk.js -->
 <script src="https://unpkg.com/vtk.js@29"></script>
-<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
 
 <script>
 // ═════════════════════════════════════════════════════════════
-// ÉTAT GLOBAL
+// ÉTAT
 // ═════════════════════════════════════════════════════════════
-let currentMethod = 'voronoi';
+let currentMethod = 'cartesian';
 let partitionerSchemas = {};
-let vtkRenderers = { particles: null, meshes: null };
-let vtkRenderWindow = null;
 let vtkOpenGLRenderWindow = null;
-let vtkInteractor = null;
-let vtkCamera = null;
-let particleActor = null;
+let vtkRenderWindow = null;
 let meshActors = [];
+let bboxActor = null;
 let isWireframe = false;
 
 // ═════════════════════════════════════════════════════════════
-// COULEURS VIRIDIS (256 valeurs)
+// VIRIDIS PALETTE
 // ═════════════════════════════════════════════════════════════
 const VIRIDIS = [];
 for (let i = 0; i < 256; i++) {
     const t = i / 255;
     VIRIDIS.push([
-        0.267004 + t * (0.993248 - 0.267004) * (t < 0.5 ? 2 * t : 1),
-        0.004874 + t * 0.906157 * (t < 0.7 ? t / 0.7 : 1),
-        0.329415 + t * (0.143936 - 0.329415) * (1 - t),
+        0.267 + t * 0.726 * (t < 0.5 ? 2*t : 1),
+        0.005 + t * 0.901 * (t < 0.7 ? t/0.7 : 1),
+        0.329 - t * 0.185 * (1-t),
     ]);
 }
 
-function stateToColor(state, nStates) {
-    const idx = Math.floor((state / Math.max(1, nStates - 1)) * 255);
-    return VIRIDIS[Math.min(255, Math.max(0, idx))];
-}
-
 // ═════════════════════════════════════════════════════════════
-// INITIALISATION VTK.js
+// VTK.js INIT
 // ═════════════════════════════════════════════════════════════
 function initVtkJS() {
     const container = document.getElementById('vtk-container');
-    const width = container.clientWidth;
-    const height = container.clientHeight;
-
-    // Fullscreen renderer
     vtkOpenGLRenderWindow = vtk.Rendering.Misc.vtkFullScreenRenderWindow.newInstance({
         rootContainer: container,
         containerStyle: { height: '100%', width: '100%', position: 'absolute', top: '0', left: '0' },
     });
-
     vtkRenderWindow = vtkOpenGLRenderWindow.getRenderWindow();
     vtkOpenGLRenderWindow.getRenderer().setBackground(0.08, 0.08, 0.15);
-    vtkCamera = vtkOpenGLRenderWindow.getRenderer().getActiveCamera();
-
-    // Interaction style
     const interactor = vtkRenderWindow.getInteractor();
-    const istyle = vtk.Interaction.Style.vtkInteractorStyleTrackballCamera.newInstance();
-    interactor.setInteractorStyle(istyle);
-
-    // Hide loading
+    interactor.setInteractorStyle(
+        vtk.Interaction.Style.vtkInteractorStyleTrackballCamera.newInstance()
+    );
     document.getElementById('vtk-loading').style.display = 'none';
 }
 
 // ═════════════════════════════════════════════════════════════
-// CRÉER ACTEURS VTK DEPUIS DONNÉES API
+// CRÉATION D'ACTEURS VTK
 // ═════════════════════════════════════════════════════════════
-
-function createParticlesActor(particleData) {
-    const { x, y, z, states, n_states } = particleData;
-    const n = x.length;
-
-    // Points
-    const pointData = new Float32Array(n * 3);
-    const colorData = new Uint8Array(n * 3);
-
-    for (let i = 0; i < n; i++) {
-        pointData[i * 3] = x[i];
-        pointData[i * 3 + 1] = y[i];
-        pointData[i * 3 + 2] = z[i];
-
-        const [r, g, b] = stateToColor(states[i], n_states);
-        colorData[i * 3] = Math.round(r * 255);
-        colorData[i * 3 + 1] = Math.round(g * 255);
-        colorData[i * 3 + 2] = Math.round(b * 255);
+function buildPolyData(vertices, faces) {
+    const nVerts = vertices.length;
+    const pointData = new Float32Array(nVerts * 3);
+    for (let i = 0; i < nVerts; i++) {
+        pointData[i*3]   = vertices[i][0];
+        pointData[i*3+1] = vertices[i][1];
+        pointData[i*3+2] = vertices[i][2];
     }
-
     const points = vtk.Common.Core.vtkPoints.newInstance();
     points.setData(pointData, 3);
 
-    const colors = vtk.Common.Core.vtkDataArray.newInstance({
-        numberOfComponents: 3,
-        values: colorData,
-    });
+    const cellFlat = [];
+    for (const face of faces) {
+        cellFlat.push(face.length, ...face);
+    }
+    const polys = vtk.Common.Core.vtkCellArray.newInstance();
+    polys.setData(new Uint32Array(cellFlat));
 
-    // PolyData with verts
     const polyData = vtk.Common.DataModel.vtkPolyData.newInstance();
     polyData.setPoints(points);
-    polyData.getPointData().setScalars(colors);
+    polyData.setPolys(polys);
+    return polyData;
+}
 
-    const verts = new Uint32Array(n * 2);
-    for (let i = 0; i < n; i++) {
-        verts[i * 2] = 1;
-        verts[i * 2 + 1] = i;
-    }
-    polyData.setVerts(verts);
+function createMeshActor(group) {
+    const { vertices, faces, opacity, color, label } = group;
+    if (!vertices || vertices.length === 0) return null;
 
-    // Mapper + Actor (render as GPU points)
+    const polyData = buildPolyData(vertices, faces);
     const mapper = vtk.Rendering.Core.vtkMapper.newInstance();
     mapper.setInputData(polyData);
-    mapper.setColorModeToDirectScalars();
 
     const actor = vtk.Rendering.Core.vtkActor.newInstance();
     actor.setMapper(mapper);
-    actor.getProperty().setPointSize(4);
-    actor.getProperty().setRepresentation(0); // 0 = POINTS
-
+    const prop = actor.getProperty();
+    prop.setColor(color[0], color[1], color[2]);
+    prop.setOpacity(opacity);
+    prop.setEdgeVisibility(true);
+    prop.setEdgeColor(1, 1, 1);
+    prop.setLineWidth(0.5);
+    prop.setRepresentationToSurface();
+    actor._isBBox = (label === 'Boîte englobante');
     return actor;
 }
 
-
-function createMeshActors(meshGroups) {
-    const actors = [];
+// ═════════════════════════════════════════════════════════════
+// RENDU
+// ═════════════════════════════════════════════════════════════
+function renderScene(meshGroups) {
+    const renderer = vtkOpenGLRenderWindow.getRenderer();
+    renderer.removeAllActors();
+    meshActors = [];
+    bboxActor = null;
 
     for (const group of meshGroups) {
-        const { vertices, faces, opacity, color, label } = group;
-        if (!vertices || vertices.length === 0) continue;
-
-        // Build VTK polydata from vertices and faces
-        const nVerts = vertices.length;
-        const points = vtk.Common.Core.vtkPoints.newInstance();
-        points.setNumberOfPoints(nVerts);
-        const pointData = new Float32Array(nVerts * 3);
-
-        for (let i = 0; i < nVerts; i++) {
-            pointData[i * 3] = vertices[i][0];
-            pointData[i * 3 + 1] = vertices[i][1];
-            pointData[i * 3 + 2] = vertices[i][2];
-        }
-        points.setData(pointData, 3);
-
-        // Build cell array
-        const cellData = [];
-        for (const face of faces) {
-            cellData.push(face.length, ...face);
-        }
-
-        const polys = vtk.Common.Core.vtkCellArray.newInstance({
-            values: new Uint32Array(cellData),
-        });
-
-        const polyData = vtk.Common.DataModel.vtkPolyData.newInstance();
-        polyData.setPoints(points);
-        polyData.setPolys(polys);
-
-        // Mapper
-        const mapper = vtk.Rendering.Core.vtkMapper.newInstance();
-        mapper.setInputData(polyData);
-
-        // Actor
-        const actor = vtk.Rendering.Core.vtkActor.newInstance();
-        actor.setMapper(mapper);
-        const prop = actor.getProperty();
-        prop.setColor(color[0], color[1], color[2]);
-        prop.setOpacity(opacity);
-        prop.setEdgeVisibility(true);
-        prop.setEdgeColor(1, 1, 1);
-        prop.setLineWidth(0.5);
-        prop.setRepresentationToSurface();
-
-        actor.set({ _label: label, _baseOpacity: opacity });
-        actors.push(actor);
-    }
-
-    return actors;
-}
-
-// ═════════════════════════════════════════════════════════════
-// PIPELINE DE RENDU
-// ═════════════════════════════════════════════════════════════
-
-function renderScene(particleData, meshGroups) {
-    const renderer = vtkOpenGLRenderWindow.getRenderer();
-
-    // Clear
-    renderer.removeAllActors();
-
-    // Particles
-    if (particleData && document.getElementById('show-particles').checked) {
-        particleActor = createParticlesActor(particleData);
-        renderer.addActor(particleActor);
-    }
-
-    // Meshes
-    meshActors = createMeshActors(meshGroups);
-    if (document.getElementById('show-meshes').checked) {
-        for (const a of meshActors) {
-            renderer.addActor(a);
+        const actor = createMeshActor(group);
+        if (!actor) continue;
+        if (actor._isBBox) {
+            bboxActor = actor;
+            if (document.getElementById('show-bbox').checked) {
+                renderer.addActor(actor);
+            }
+        } else {
+            meshActors.push(actor);
+            if (document.getElementById('show-meshes').checked) {
+                renderer.addActor(actor);
+            }
         }
     }
 
@@ -306,190 +231,190 @@ function renderScene(particleData, meshGroups) {
 }
 
 // ═════════════════════════════════════════════════════════════
-// SCHÉMAS & PARAMÈTRES (réutilise l'API existante)
+// CHANGEMENT DE MÉTHODE
 // ═════════════════════════════════════════════════════════════
-
-async function loadPartitionerSchemas() {
-    try {
-        const resp = await fetch('/api/partitioner/schemas/');
-        const data = await resp.json();
-        partitionerSchemas = data.schemas;
-    } catch (e) { console.error(e); }
-}
-
-function changeMethod() {
+async function onMethodChange() {
     currentMethod = document.getElementById('method-select').value;
+
+    // Update description
     const schema = partitionerSchemas[currentMethod];
-    if (!schema) return;
+    if (schema) {
+        document.getElementById('method-description').innerHTML =
+            `<strong>${schema.label}</strong><br>${schema.description}`;
+    }
 
-    document.getElementById('method-description').innerHTML =
-        `<strong>${schema.label}</strong><br>${schema.description}`;
+    // Filter experiments for this method
+    await loadExperimentsForMethod(currentMethod);
+}
 
-    const container = document.getElementById('parameters-container');
-    container.innerHTML = '';
+async function loadExperimentsForMethod(method) {
+    const select = document.getElementById('exp-select');
+    select.innerHTML = '<option value="">Chargement...</option>';
 
-    Object.entries(schema.parameters).forEach(([paramName, paramSpec]) => {
-        const div = document.createElement('div');
-        if (paramSpec.type === 'select') {
-            div.innerHTML = `
-                <label class="text-xs font-semibold text-gray-700 block mb-1">${paramSpec.label}</label>
-                <select id="param-${paramName}" class="w-full px-3 py-2 border border-gray-300 rounded text-sm">
-                    ${paramSpec.options.map(opt => `<option value="${opt}" ${opt === paramSpec.default ? 'selected' : ''}>${opt}</option>`).join('')}
-                </select>
-                <p class="text-xs text-gray-500 mt-1">${paramSpec.help}</p>`;
-        } else {
-            div.innerHTML = `
-                <label class="text-xs font-semibold text-gray-700 block mb-1">
-                    ${paramSpec.label}
-                    <span id="val-${paramName}" class="text-blue-600 font-bold">${paramSpec.default}</span>
-                </label>
-                <input type="range" id="param-${paramName}"
-                       min="${paramSpec.min}" max="${paramSpec.max}" value="${paramSpec.default}"
-                       class="w-full" onchange="updateParamDisplay('${paramName}')">
-                <p class="text-xs text-gray-500 mt-1">${paramSpec.help}</p>`;
+    try {
+        const params = new URLSearchParams();
+        params.append('method', method);
+        const resp = await fetch(`/api/analysis/experiments/?${params}`);
+        const data = await resp.json();
+
+        select.innerHTML = '<option value="">-- Choisir une expérience --</option>';
+
+        const exps = data.experiments || [];
+        for (const exp of exps) {
+            const opt = document.createElement('option');
+            opt.value = exp.id;
+            // Build label: n_cells cells, nlt=X, step=Y
+            const parts = [];
+            parts.push(`${exp.n_states || '?'} états`);
+            if (exp.nlt) parts.push(`nlt=${exp.nlt}`);
+            if (exp.step_size && exp.step_size !== 1) parts.push(`step=${exp.step_size}`);
+            if (exp.start_index && exp.start_index !== 0) parts.push(`start=${exp.start_index}`);
+            opt.textContent = parts.join(' | ');
+            opt.dataset.params = JSON.stringify(exp.parameters || {});
+            opt.dataset.exp = JSON.stringify(exp);
+            select.appendChild(opt);
         }
-        container.appendChild(div);
-    });
-}
 
-function updateParamDisplay(paramName) {
-    const input = document.getElementById(`param-${paramName}`);
-    const display = document.getElementById(`val-${paramName}`);
-    if (display) display.textContent = input.value;
+        document.getElementById('exp-count').textContent =
+            `${exps.length} expérience${exps.length > 1 ? 's' : ''} disponible${exps.length > 1 ? 's' : ''}`;
+
+    } catch (e) {
+        select.innerHTML = '<option value="">Erreur de chargement</option>';
+        document.getElementById('exp-count').textContent = 'Erreur: ' + e.message;
+    }
 }
 
 // ═════════════════════════════════════════════════════════════
-// GÉNÉRATION VISUALISATION
+// CHANGEMENT D'EXPÉRIENCE
 // ═════════════════════════════════════════════════════════════
+async function onExpChange() {
+    const select = document.getElementById('exp-select');
+    const expId = select.value;
+    if (!expId) return;
 
-async function generateVisualization() {
     const loading = document.getElementById('vtk-loading');
     loading.style.display = 'flex';
 
     try {
-        const schema = partitionerSchemas[currentMethod];
         const params = new URLSearchParams();
-        params.append('method', currentMethod);
-        params.append('file_index', document.getElementById('file-index').value);
+        params.append('exp_id', expId);
 
-        Object.keys(schema.parameters).forEach(paramName => {
-            const input = document.getElementById(`param-${paramName}`);
-            if (input) params.append(paramName, input.value);
-        });
-
-        const response = await fetch(`/api/partitioner/trame-data/?${params}`);
-        const data = await response.json();
+        const resp = await fetch(`/api/partitioner/trame-data/?${params}`);
+        const data = await resp.json();
 
         if (!data.success) {
             alert('Erreur: ' + (data.error || 'Erreur inconnue'));
-            loading.style.display = 'none';
             return;
         }
 
-        // Stats
+        // Afficher paramètres
+        showParameters(data.parameters, data.method);
+
+        // Afficher stats
         showStatistics(data.statistics);
 
-        // Render 3D
-        renderScene(data.particles, data.mesh_groups);
+        // Afficher matrix diagnostics
+        if (data.matrix) showMatrixInfo(data.matrix);
 
-        // Histogram with Plotly
-        plotPopulationHistogram(data.particles);
+        // Rendu 3D
+        renderScene(data.mesh_groups);
+
+        // Montrer les contrôles
+        document.getElementById('render-controls').classList.remove('hidden');
 
     } catch (e) {
-        console.error('Error:', e);
+        console.error(e);
         alert('Erreur: ' + e.message);
     } finally {
         loading.style.display = 'none';
     }
 }
 
+// ═════════════════════════════════════════════════════════════
+// AFFICHAGE
+// ═════════════════════════════════════════════════════════════
+function showParameters(params, method) {
+    const container = document.getElementById('params-display');
+    const content = document.getElementById('params-content');
+    let html = `<div class="font-bold text-blue-700 mb-1">${method}</div>`;
+    for (const [k, v] of Object.entries(params)) {
+        html += `<div class="flex justify-between"><span class="text-gray-500">${k}:</span><span class="font-mono">${v}</span></div>`;
+    }
+    content.innerHTML = html;
+    container.classList.remove('hidden');
+}
+
 function showStatistics(stats) {
     const container = document.getElementById('stats-container');
     const content = document.getElementById('stats-content');
     content.innerHTML = `
-        <div class="flex justify-between"><span class="text-gray-600">Particules:</span><span class="font-bold">${stats.n_particles}</span></div>
-        <div class="flex justify-between"><span class="text-gray-600">Cellules:</span><span class="font-bold">${stats.n_states}</span></div>
-        <div class="flex justify-between"><span class="text-gray-600">Visités:</span><span class="font-bold text-green-600">${stats.n_visited}/${stats.n_states}</span></div>
-        <div class="flex justify-between"><span class="text-gray-600">CV:</span><span class="font-bold text-blue-600">${stats.cv.toFixed(3)}</span></div>
-        <div class="flex justify-between"><span class="text-gray-600">Moy. pop:</span><span class="font-bold">${stats.population_mean.toFixed(1)}</span></div>
+        <div class="flex justify-between"><span class="text-gray-600">Cellules:</span><span class="font-bold">${stats.n_states || stats.n_cells || 0}</span></div>
+        <div class="flex justify-between"><span class="text-gray-600">Visités:</span><span class="font-bold text-green-600">${stats.n_visited || 0}</span></div>
+        <div class="flex justify-between"><span class="text-gray-600">Vides:</span><span class="font-bold text-red-500">${stats.n_empty || 0}</span></div>
+        <div class="flex justify-between"><span class="text-gray-600">CV:</span><span class="font-bold text-blue-600">${(stats.cv || 0).toFixed(4)}</span></div>
+        <div class="flex justify-between"><span class="text-gray-600">Moy. pop:</span><span class="font-bold">${(stats.population_mean || 0).toFixed(1)}</span></div>
     `;
     container.classList.remove('hidden');
-    document.getElementById('legend-container').classList.remove('hidden');
 }
 
-function plotPopulationHistogram(particleData) {
-    const { states, n_states } = particleData;
-    const counts = new Array(n_states).fill(0);
-    states.forEach(s => counts[s]++);
-
-    Plotly.newPlot('population-histogram', [{
-        x: counts, type: 'histogram', nbinsx: 30,
-        marker: { color: 'rgba(99, 102, 241, 0.7)' }
-    }], {
-        title: 'Distribution des Populations par Cellule',
-        xaxis: { title: 'Nombre de particules' },
-        yaxis: { title: 'Nombre de cellules' },
-        height: 300, margin: { l: 50, r: 20, t: 40, b: 40 }
-    }, { responsive: true });
+function showMatrixInfo(matrix) {
+    const container = document.getElementById('matrix-info');
+    const content = document.getElementById('matrix-content');
+    content.innerHTML = `
+        <div class="p-3 bg-white rounded border"><div class="text-xs text-gray-500">P(rester) moy</div><div class="font-bold text-lg">${(matrix.diagonal_mean || 0).toFixed(3)}</div></div>
+        <div class="p-3 bg-white rounded border"><div class="text-xs text-gray-500">λ₂</div><div class="font-bold text-lg">${(matrix.eigenvalue_2 || 0).toFixed(3)}</div></div>
+        <div class="p-3 bg-white rounded border"><div class="text-xs text-gray-500">Gap spectral</div><div class="font-bold text-lg">${(matrix.spectral_gap || 0).toFixed(3)}</div></div>
+        <div class="p-3 bg-white rounded border"><div class="text-xs text-gray-500">États visités</div><div class="font-bold text-lg">${matrix.n_states_visited || 0}</div></div>
+    `;
+    container.classList.remove('hidden');
 }
 
 // ═════════════════════════════════════════════════════════════
-// CONTRÔLES INTERACTIFS
+// CONTRÔLES
 // ═════════════════════════════════════════════════════════════
-
 function resetCamera() {
-    const renderer = vtkOpenGLRenderWindow.getRenderer();
-    renderer.resetCamera();
+    vtkOpenGLRenderWindow.getRenderer().resetCamera();
     vtkRenderWindow.render();
 }
 
 function toggleWireframe() {
     isWireframe = !isWireframe;
     for (const actor of meshActors) {
-        const prop = actor.getProperty();
-        if (isWireframe) {
-            prop.setRepresentationToWireframe();
-        } else {
-            prop.setRepresentationToSurface();
-        }
+        actor.getProperty().setRepresentation(isWireframe ? 1 : 2);
     }
+    if (bboxActor) bboxActor.getProperty().setRepresentation(isWireframe ? 1 : 2);
     vtkRenderWindow.render();
 }
 
 function toggleLayer(layer) {
     const renderer = vtkOpenGLRenderWindow.getRenderer();
-    if (layer === 'particles' && particleActor) {
-        if (document.getElementById('show-particles').checked) {
-            renderer.addActor(particleActor);
-        } else {
-            renderer.removeActor(particleActor);
-        }
-    } else if (layer === 'meshes') {
+    if (layer === 'meshes') {
+        const show = document.getElementById('show-meshes').checked;
         for (const a of meshActors) {
-            if (document.getElementById('show-meshes').checked) {
-                renderer.addActor(a);
-            } else {
-                renderer.removeActor(a);
-            }
+            if (show) renderer.addActor(a); else renderer.removeActor(a);
         }
+    } else if (layer === 'bbox' && bboxActor) {
+        if (document.getElementById('show-bbox').checked) renderer.addActor(bboxActor);
+        else renderer.removeActor(bboxActor);
     }
     vtkRenderWindow.render();
 }
 
 function updateMeshOpacity() {
     const val = document.getElementById('mesh-opacity').value / 100;
-    for (const actor of meshActors) {
-        actor.getProperty().setOpacity(val);
-    }
+    for (const actor of meshActors) actor.getProperty().setOpacity(val);
     vtkRenderWindow.render();
 }
 
-function updatePointSize() {
-    const val = parseInt(document.getElementById('point-size').value);
-    if (particleActor) {
-        particleActor.getProperty().setPointSize(val * 2);
-    }
-    vtkRenderWindow.render();
+// ═════════════════════════════════════════════════════════════
+// CHARGER SCHÉMAS
+// ═════════════════════════════════════════════════════════════
+async function loadPartitionerSchemas() {
+    try {
+        const resp = await fetch('/api/partitioner/schemas/');
+        const data = await resp.json();
+        partitionerSchemas = data.schemas;
+    } catch (e) { console.warn('Schemas:', e); }
 }
 
 // ═════════════════════════════════════════════════════════════
@@ -498,8 +423,7 @@ function updatePointSize() {
 window.addEventListener('DOMContentLoaded', async () => {
     initVtkJS();
     await loadPartitionerSchemas();
-    changeMethod();
-    generateVisualization();
+    await onMethodChange();
 });
 </script>
 {% endblock %}

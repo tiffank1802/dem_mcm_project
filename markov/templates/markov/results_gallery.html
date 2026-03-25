@@ -1,0 +1,227 @@
+{% extends 'markov/results_base.html' %}
+{% load static %}
+
+{% block title %}Results Gallery{% endblock %}
+
+{% block content %}
+
+<header>
+    <h1 class="page-title">📊 Résultats d'Analyse</h1>
+    <p class="page-subtitle">
+        Galerie interactive de tous vos résultats Markov avec effet de vitre givrée.
+        Cliquez sur une image pour voir les détails complets.
+    </p>
+</header>
+
+<!-- ═══ FILTERS ═══ -->
+<section class="filters-wrapper">
+    <button class="filter-btn active" onclick="filterResults('all')">
+        📌 Tous ({{ results|length }})
+    </button>
+    <button class="filter-btn" onclick="filterResults('completed')">
+        ✅ Complétés
+    </button>
+    <button class="filter-btn" onclick="filterResults('pending')">
+        ⏳ En cours
+    </button>
+    <button class="filter-btn" onclick="filterResults('failed')">
+        ❌ Erreurs
+    </button>
+    <input type="search" id="search-results" placeholder="🔍 Chercher..." 
+           class="filter-btn" style="flex: 1; min-width: 200px;">
+</section>
+
+<!-- ═══ STATS SECTION ═══ -->
+<section class="section-header">
+    <div class="section-title">📈 Statistiques</div>
+</section>
+
+<div class="product-grid">
+    <!-- Total Results Card -->
+    <div class="glass-card stat-card">
+        <span class="stat-icon">📊</span>
+        <span class="stat-card-value">{{ total_results }}</span>
+        <span class="stat-card-label">Analyses totales</span>
+    </div>
+
+    <!-- Completed Card -->
+    <div class="glass-card stat-card">
+        <span class="stat-icon">✅</span>
+        <span class="stat-card-value">{{ completed_count }}</span>
+        <span class="stat-card-label">Complétées</span>
+    </div>
+
+    <!-- Pending Card -->
+    <div class="glass-card stat-card">
+        <span class="stat-icon">⏳</span>
+        <span class="stat-card-value">{{ pending_count }}</span>
+        <span class="stat-card-label">En traitement</span>
+    </div>
+
+    <!-- Failed Card -->
+    <div class="glass-card stat-card">
+        <span class="stat-icon">❌</span>
+        <span class="stat-card-value">{{ failed_count }}</span>
+        <span class="stat-card-label">Avec erreurs</span>
+    </div>
+</div>
+
+<!-- ═══ RESULTS GALLERY ═══ -->
+<section class="section-header">
+    <div class="section-title">🖼️ Galerie des résultats</div>
+</section>
+
+<div class="gallery-masonry" id="results-gallery">
+    {% for result in results %}
+    <div class="glass-card gallery-masonry-item result-card" data-status="{{ result.status }}" data-name="{{ result.name }}">
+        <!-- Image -->
+        <div class="result-header">
+            {% if result.image_url %}
+            <img src="{{ result.image_url }}" alt="{{ result.name }}" class="result-image">
+            {% else %}
+            <div class="result-image" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; align-items: center; justify-content: center; color: white; font-size: 2rem;">
+                📊
+            </div>
+            {% endif %}
+
+            <div class="result-meta">
+                <h3 class="result-name">{{ result.name }}</h3>
+                <p class="result-category">{{ result.analysis_type }}</p>
+                <span class="badge badge-{{ result.status }}">
+                    {{ result.get_status_display }}
+                </span>
+            </div>
+        </div>
+
+        <!-- Stats -->
+        <div class="result-stats">
+            <div class="stat">
+                <span class="stat-value">{{ result.iterations }}</span>
+                <span class="stat-label">Itérations</span>
+            </div>
+            <div class="stat">
+                <span class="stat-value">{{ result.accuracy|floatformat:1 }}%</span>
+                <span class="stat-label">Précision</span>
+            </div>
+            <div class="stat">
+                <span class="stat-value">{{ result.duration }}s</span>
+                <span class="stat-label">Durée</span>
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="result-actions">
+            <button class="action-btn" onclick="viewDetails({{ result.id }})">
+                👁️ Voir détails
+            </button>
+            <button class="action-btn" onclick="downloadResult({{ result.id }})">
+                ⬇️ Télécharger
+            </button>
+        </div>
+    </div>
+    {% empty %}
+    <div class="glass-card" style="grid-column: 1 / -1; padding: 3rem; text-align: center;">
+        <p style="font-size: 3rem; margin-bottom: 1rem;">📭</p>
+        <p style="font-size: 1.2rem; opacity: 0.7;">Aucun résultat trouvé</p>
+        <p style="opacity: 0.5;">Lancez une nouvelle analyse pour voir les résultats ici.</p>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- ═══ DETAILED RESULTS TABLE ═══ -->
+<section class="section-header">
+    <div class="section-title">📋 Vue détaillée</div>
+</section>
+
+<div class="glass-card results-container">
+    <table class="results-table">
+        <thead>
+            <tr>
+                <th>Image</th>
+                <th>Nom de l'analyse</th>
+                <th>Type</th>
+                <th>Itérations</th>
+                <th>Précision</th>
+                <th>Durée</th>
+                <th>Statut</th>
+                <th>Date</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for result in results %}
+            <tr>
+                <td>
+                    {% if result.image_url %}
+                    <img src="{{ result.image_url }}" alt="{{ result.name }}" class="results-image">
+                    {% else %}
+                    <div style="width: 60px; height: 60px; background: linear-gradient(135deg, #667eea, #764ba2); border-radius: 8px; display: flex; align-items: center; justify-content: center; color: white;">📊</div>
+                    {% endif %}
+                </td>
+                <td><strong>{{ result.name }}</strong></td>
+                <td>{{ result.analysis_type }}</td>
+                <td class="result-value">{{ result.iterations }}</td>
+                <td class="result-value">{{ result.accuracy|floatformat:1 }}%</td>
+                <td>{{ result.duration }}s</td>
+                <td>
+                    <span class="result-status status-{{ result.status }}">
+                        {{ result.get_status_display }}
+                    </span>
+                </td>
+                <td>{{ result.created_at|date:"d/m/Y H:i" }}</td>
+                <td>
+                    <a href="{% url 'markov:result_detail' result.id %}" style="color: var(--accent-color); text-decoration: none; font-weight: 600;">
+                        Voir →
+                    </a>
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="9" style="text-align: center; padding: 2rem; opacity: 0.5;">
+                    Aucun résultat disponible
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<script>
+    function filterResults(status) {
+        const gallery = document.getElementById('results-gallery');
+        const items = gallery.querySelectorAll('.result-card');
+        const buttons = document.querySelectorAll('.filter-btn');
+
+        buttons.forEach(btn => btn.classList.remove('active'));
+        event.target.classList.add('active');
+
+        items.forEach(item => {
+            if (status === 'all' || item.dataset.status === status) {
+                item.style.display = 'block';
+            } else {
+                item.style.display = 'none';
+            }
+        });
+    }
+
+    function viewDetails(resultId) {
+        window.location.href = `/markov/results/${resultId}/`;
+    }
+
+    function downloadResult(resultId) {
+        window.location.href = `/markov/results/${resultId}/download/`;
+    }
+
+    // Search functionality
+    document.getElementById('search-results').addEventListener('input', (e) => {
+        const query = e.target.value.toLowerCase();
+        const items = document.querySelectorAll('.result-card');
+
+        items.forEach(item => {
+            const name = item.dataset.name.toLowerCase();
+            item.style.display = name.includes(query) ? 'block' : 'none';
+        });
+    });
+</script>
+
+{% endblock %}
