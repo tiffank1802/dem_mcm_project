@@ -418,11 +418,7 @@ def unified_analysis(request):
 
 def dashboard(request):
     """Page d'accueil."""
-    methods = PartitionMethod.objects.values("name").annotate(
-        count=Count("id"),
-        avg_cells=Avg("n_cells"),
-        avg_cv=Avg("population_cv"),
-    ).order_by("name")
+    methods = PartitionMethod.objects.all().order_by("name")
 
     experiments = Experiment.objects.select_related("partition_method", "matrix")
 

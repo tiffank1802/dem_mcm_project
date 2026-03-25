@@ -1,0 +1,645 @@
+/* ============================================
+   LIQUID GLASS CARD SYSTEM
+   ============================================ */
+
+:root {
+    --glass-card-bg: light-dark(
+        hsl(0 0% 100% / 0.08),
+        hsl(0 0% 100% / 0.04)
+    );
+    --glass-card-border: light-dark(
+        hsl(0 0% 100% / 0.25),
+        hsl(0 0% 100% / 0.1)
+    );
+    --glass-card-shadow-1: rgba(255, 255, 255, 0.192);
+    --glass-card-shadow-2: rgba(255, 255, 255, 0.274);
+    --glass-card-shadow-3: rgba(0, 0, 0, 0.164);
+    --glass-glow: light-dark(
+        rgba(99, 102, 241, 0.15),
+        rgba(99, 102, 241, 0.25)
+    );
+    --liquid-speed: 0.5s;
+    --icon-color: rgb(255, 174, 0);
+}
+
+/* Masquer les filtres SVG */
+.svg-filters {
+    position: absolute;
+    width: 0;
+    height: 0;
+    overflow: hidden;
+}
+
+/* ============================================
+   CARD DE BASE (conservé de l'original)
+   ============================================ */
+.card {
+    max-width: fit-content;
+    border-radius: 15px;
+    display: flex;
+    flex-direction: column;
+    align-content: center;
+    justify-content: center;
+    gap: 1rem;
+    transition: var(--liquid-speed);
+}
+
+.card ul {
+    padding: 1rem;
+    display: flex;
+    list-style: none;
+    gap: 1rem;
+    align-items: center;
+    justify-content: center;
+    align-content: center;
+    flex-wrap: wrap;
+    flex-direction: column;
+    margin: 0;
+}
+
+.card ul li {
+    cursor: pointer;
+    position: relative;
+}
+
+.svg {
+    transition: all 0.3s;
+    padding: 1rem;
+    height: 60px;
+    width: 60px;
+    border-radius: 100%;
+    color: var(--icon-color);
+    fill: currentColor;
+}
+
+.text {
+    opacity: 0;
+    border-radius: 5px;
+    padding: 5px 10px;
+    transition: all 0.3s;
+    color: var(--icon-color);
+    position: absolute;
+    z-index: 9999;
+    white-space: nowrap;
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+/* Isometric projection */
+.iso-pro {
+    transition: var(--liquid-speed);
+}
+
+.iso-pro:hover a > .svg {
+    transform: translate(15px, -15px);
+}
+
+.iso-pro:hover .text {
+    opacity: 1;
+    transform: translate(25px, -2px) skew(-5deg);
+}
+
+.iso-pro:hover .svg {
+    transform: translate(5px, -5px);
+}
+
+.iso-pro span {
+    opacity: 0;
+    position: absolute;
+    border-radius: 50%;
+    transition: all 0.3s;
+    height: 60px;
+    width: 60px;
+}
+
+.iso-pro:hover span { opacity: 1; }
+.iso-pro:hover span:nth-child(1) { opacity: 0.2; }
+.iso-pro:hover span:nth-child(2) { opacity: 0.4; transform: translate(5px, -5px); }
+.iso-pro:hover span:nth-child(3) { opacity: 0.6; transform: translate(10px, -10px); }
+
+/* ============================================
+   LIQUID GLASS EFFECT (nouveau)
+   ============================================ */
+.liquid-glass-card {
+    position: relative;
+    background: var(--glass-card-bg);
+    backdrop-filter: url(#liquid-glass) blur(15px) saturate(1.4) brightness(1.05);
+    -webkit-backdrop-filter: blur(15px) saturate(1.4) brightness(1.05);
+    border: 1px solid var(--glass-card-border);
+    box-shadow:
+        /* Reflets intérieurs liquides */
+        inset 0 1px 0 rgba(255, 255, 255, 0.3),
+        inset 0 -1px 0 rgba(255, 255, 255, 0.05),
+        inset 0 0 20px var(--glass-card-shadow-1),
+        inset 0 0 5px var(--glass-card-shadow-2),
+        /* Ombre extérieure douce */
+        0 5px 5px var(--glass-card-shadow-3),
+        0 8px 32px rgba(0, 0, 0, 0.08),
+        0 20px 60px rgba(0, 0, 0, 0.04);
+    overflow: visible;
+}
+
+/* Reflet liquide supérieur */
+.liquid-glass-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 50%;
+    border-radius: 15px 15px 50% 50%;
+    background: linear-gradient(
+        180deg,
+        rgba(255, 255, 255, 0.15) 0%,
+        rgba(255, 255, 255, 0.05) 40%,
+        transparent 100%
+    );
+    pointer-events: none;
+    z-index: 1;
+}
+
+/* Bord lumineux animé */
+.liquid-glass-card::after {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    border-radius: 16px;
+    background: linear-gradient(
+        135deg,
+        rgba(255, 255, 255, 0.3) 0%,
+        transparent 30%,
+        transparent 70%,
+        rgba(255, 255, 255, 0.1) 100%
+    );
+    mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    mask-composite: exclude;
+    -webkit-mask-composite: xor;
+    padding: 1px;
+    pointer-events: none;
+    z-index: 2;
+    transition: opacity 0.3s;
+}
+
+.liquid-glass-card:hover {
+    background: light-dark(
+        hsl(0 0% 100% / 0.12),
+        hsl(0 0% 100% / 0.08)
+    );
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.4),
+        inset 0 -1px 0 rgba(255, 255, 255, 0.08),
+        inset 0 0 30px rgba(255, 255, 255, 0.25),
+        inset 0 0 8px rgba(255, 255, 255, 0.35),
+        0 5px 5px var(--glass-card-shadow-3),
+        0 12px 40px rgba(0, 0, 0, 0.1),
+        0 0 30px var(--glass-glow);
+    transform: translateY(-2px);
+}
+
+.liquid-glass-card:hover::after {
+    background: linear-gradient(
+        135deg,
+        rgba(255, 255, 255, 0.5) 0%,
+        rgba(99, 102, 241, 0.2) 30%,
+        transparent 60%,
+        rgba(255, 255, 255, 0.15) 100%
+    );
+}
+
+/* Les icônes SVG dans le liquid glass */
+.liquid-glass-card .svg {
+    background: var(--glass-card-bg);
+    backdrop-filter: blur(8px);
+    border: 1px solid var(--glass-card-border);
+    box-shadow:
+        inset 0 0 20px rgba(255, 255, 255, 0.2),
+        inset 0 0 5px rgba(255, 255, 255, 0.35),
+        0 4px 12px rgba(0, 0, 0, 0.15);
+    position: relative;
+    z-index: 3;
+}
+
+.liquid-glass-card .svg:hover {
+    box-shadow:
+        inset 0 0 25px rgba(255, 255, 255, 0.3),
+        inset 0 0 8px rgba(255, 255, 255, 0.5),
+        0 6px 20px rgba(0, 0, 0, 0.2),
+        0 0 20px rgba(255, 174, 0, 0.15);
+}
+
+/* Le label texte en liquid glass */
+.liquid-glass-card .text {
+    background: var(--glass-card-bg);
+    backdrop-filter: blur(12px) saturate(1.3);
+    border: 1px solid var(--glass-card-border);
+    box-shadow:
+        -5px 0 1px rgba(153, 153, 153, 0.1),
+        -10px 0 1px rgba(153, 153, 153, 0.05),
+        inset 0 0 15px rgba(255, 255, 255, 0.2),
+        inset 0 0 4px rgba(255, 255, 255, 0.35),
+        0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* Les spans d'ombre isométrique */
+.liquid-glass-card .iso-pro span {
+    background: var(--glass-card-bg);
+    border: 1px solid var(--glass-card-border);
+    box-shadow: inset 0 0 10px rgba(255, 255, 255, 0.15);
+}
+
+/* ============================================
+   CARD ORIGINALE (sans glass, comparaison)
+   ============================================ */
+.original-card {
+    backdrop-filter: blur(15px);
+    box-shadow:
+        inset 0 0 20px rgba(255, 255, 255, 0.192),
+        inset 0 0 5px rgba(255, 255, 255, 0.274),
+        0 5px 5px rgba(0, 0, 0, 0.164);
+}
+
+.original-card:hover {
+    animation: ease-out 5s;
+    background: rgba(173, 173, 173, 0.05);
+}
+
+.original-card .svg {
+    box-shadow:
+        inset 0 0 20px rgba(255, 255, 255, 0.3),
+        inset 0 0 5px rgba(255, 255, 255, 0.5),
+        0 5px 5px rgba(0, 0, 0, 0.164);
+}
+
+.original-card .text {
+    background-color: rgba(255, 255, 255, 0.3);
+    box-shadow:
+        -5px 0 1px rgba(153, 153, 153, 0.2),
+        -10px 0 1px rgba(153, 153, 153, 0.2),
+        inset 0 0 20px rgba(255, 255, 255, 0.3),
+        inset 0 0 5px rgba(255, 255, 255, 0.5),
+        0 5px 5px rgba(0, 0, 0, 0.082);
+}
+
+.original-card .iso-pro span {
+    color: #1877f2;
+    border-color: #1877f2;
+    box-shadow:
+        inset 0 0 20px rgba(255, 255, 255, 0.3),
+        inset 0 0 5px rgba(255, 255, 255, 0.5),
+        0 5px 5px rgba(0, 0, 0, 0.164);
+}
+
+/* ============================================
+   COULEURS PAR PLATEFORME
+   ============================================ */
+[data-platform="facebook"] .svg { color: #1877f2; }
+[data-platform="facebook"] .text { color: #1877f2; }
+[data-platform="facebook"] span { border-color: #1877f2; }
+
+[data-platform="twitter"] .svg { color: #1da1f2; }
+[data-platform="twitter"] .text { color: #1da1f2; }
+[data-platform="twitter"] span { border-color: #1da1f2; }
+
+[data-platform="instagram"] .svg { color: #e4405f; }
+[data-platform="instagram"] .text { color: #e4405f; }
+[data-platform="instagram"] span { border-color: #e4405f; }
+
+[data-platform="github"] .svg { color: light-dark(#333, #f0f0f0); }
+[data-platform="github"] .text { color: light-dark(#333, #f0f0f0); }
+[data-platform="github"] span { border-color: light-dark(#333, #f0f0f0); }
+
+[data-platform="linkedin"] .svg { color: #0a66c2; }
+[data-platform="linkedin"] .text { color: #0a66c2; }
+[data-platform="linkedin"] span { border-color: #0a66c2; }
+
+/* ============================================
+   LAYOUT : SHOWCASE
+   ============================================ */
+.cards-showcase {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3rem;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 2rem 0;
+}
+
+.glass-card-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+}
+
+.card-label {
+    font-size: 0.85rem;
+    opacity: 0.5;
+    font-style: italic;
+    text-align: center;
+}
+
+/* ============================================
+   VARIANTES DE CARTES
+   ============================================ */
+
+/* Horizontale */
+.card-horizontal ul {
+    flex-direction: row;
+}
+
+/* Bulle */
+.card-bubble {
+    border-radius: 50%;
+    width: 100px;
+    height: 100px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.card-bubble::before {
+    border-radius: 50%;
+}
+
+.card-bubble::after {
+    border-radius: 50%;
+}
+
+.card-bubble ul {
+    padding: 0;
+}
+
+/* Profil */
+.card-profile {
+    min-width: 220px;
+    border-radius: 20px;
+}
+
+.card-profile::before { border-radius: 20px 20px 50% 50%; }
+.card-profile::after { border-radius: 21px; }
+
+.profile-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1.25rem 1.25rem 0;
+    position: relative;
+    z-index: 3;
+}
+
+.profile-avatar {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    border: 2px solid var(--glass-card-border);
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
+}
+
+.profile-info h3 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.profile-info p {
+    margin: 0;
+    font-size: 0.8rem;
+    opacity: 0.6;
+}
+
+.card-profile ul {
+    flex-direction: row;
+}
+
+/* ============================================
+   VARIANTES GRID
+   ============================================ */
+.variations-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2rem;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem 0;
+}
+
+/* ============================================
+   CARTES DE DONNÉES DYNAMIQUES
+   ============================================ */
+.dynamic-cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 1.5rem;
+    padding: 1rem 0;
+}
+
+.card-data {
+    padding: 1.5rem;
+    border-radius: 20px;
+    min-width: 0;
+    max-width: none;
+}
+
+.card-data::before { border-radius: 20px 20px 50% 50%; }
+.card-data::after { border-radius: 21px; }
+
+.data-card-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+    position: relative;
+    z-index: 3;
+}
+
+.data-icon {
+    font-size: 1.5rem;
+}
+
+.data-card-header h3 {
+    margin: 0;
+    font-size: 0.9rem;
+    font-weight: 600;
+    opacity: 0.8;
+}
+
+.data-card-value {
+    font-size: 2rem;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+    position: relative;
+    z-index: 3;
+    background: linear-gradient(135deg, canvasText 0%, color-mix(in oklch, canvasText, transparent 30%) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.data-card-description {
+    font-size: 0.8rem;
+    opacity: 0.6;
+    position: relative;
+    z-index: 3;
+}
+
+.card-data ul {
+    padding: 0.75rem 0 0;
+    flex-direction: row;
+    gap: 0.75rem;
+}
+
+.card-data .svg {
+    height: 44px;
+    width: 44px;
+    padding: 0.65rem;
+}
+
+.card-data .iso-pro span {
+    height: 44px;
+    width: 44px;
+}
+
+/* ============================================
+   DISPLACEMENT PREVIEW (DEBUG)
+   ============================================ */
+.displacement-preview {
+    margin-top: 1rem;
+    border-radius: 12px;
+    overflow: hidden;
+    opacity: 0.7;
+    transition: opacity 0.3s;
+    max-width: 200px;
+}
+
+.displacement-preview:hover {
+    opacity: 1;
+}
+
+.displacement-preview svg {
+    display: block;
+    width: 100%;
+    height: auto;
+}
+
+/* ============================================
+   ANIMATIONS
+   ============================================ */
+@keyframes liquid-shimmer {
+    0% {
+        background-position: -200% center;
+    }
+    100% {
+        background-position: 200% center;
+    }
+}
+
+.liquid-glass-card:hover::before {
+    background: linear-gradient(
+        180deg,
+        rgba(255, 255, 255, 0.2) 0%,
+        rgba(255, 255, 255, 0.08) 40%,
+        transparent 100%
+    );
+}
+
+/* Shimmer subtil au survol */
+@keyframes glass-pulse {
+    0%, 100% {
+        box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 0.3),
+            inset 0 0 20px var(--glass-card-shadow-1),
+            inset 0 0 5px var(--glass-card-shadow-2),
+            0 5px 5px var(--glass-card-shadow-3),
+            0 8px 32px rgba(0, 0, 0, 0.08);
+    }
+    50% {
+        box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 0.4),
+            inset 0 0 25px rgba(255, 255, 255, 0.25),
+            inset 0 0 8px rgba(255, 255, 255, 0.35),
+            0 5px 5px var(--glass-card-shadow-3),
+            0 12px 40px rgba(0, 0, 0, 0.1),
+            0 0 20px var(--glass-glow);
+    }
+}
+
+/* ============================================
+   PAGE STYLES
+   ============================================ */
+.content-area {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 2rem 1rem;
+}
+
+.page-header {
+    text-align: center;
+    margin-bottom: 3rem;
+    padding: 2rem 0;
+}
+
+.page-header h1 {
+    font-size: 3rem;
+    margin: 0 0 0.5rem 0;
+    line-height: 1.2;
+}
+
+.page-header h1.fluid {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.page-header .subtitle {
+    font-size: 1.1rem;
+    opacity: 0.6;
+}
+
+.section {
+    margin-bottom: 4rem;
+}
+
+.section-title {
+    font-size: 1.5rem;
+    font-weight: 600;
+    margin-bottom: 2rem;
+    text-align: center;
+}
+
+.placeholder {
+    height: 200px;
+}
+
+.dock-placeholder {
+    height: 100%;
+    border-radius: 20px;
+    background: light-dark(
+        linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 100%),
+        linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.02) 100%)
+    );
+    border: 1px solid var(--glass-card-border);
+    backdrop-filter: blur(10px);
+}
+
+/* ============================================
+   RESPONSIVE
+   ============================================ */
+@media (max-width: 768px) {
+    .cards-showcase {
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .dynamic-cards-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .variations-grid {
+        flex-direction: column;
+    }
+
+    .page-header h1 {
+        font-size: 2rem;
+    }
+}
