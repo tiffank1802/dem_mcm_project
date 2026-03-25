@@ -1,0 +1,204 @@
+{% extends "markov/base.html" %}
+{% block title %}{{ experiment.folder_name }}{% endblock %}
+
+{% block content %}
+<div class="fade-in">
+
+    <!-- ═══ EN-TÊTE ═══ -->
+    <div class="flex items-center gap-3 mb-6">
+        <a href="{% url 'markov:experiment_list' %}" class="text-gray-400 hover:text-blue-500">← Retour</a>
+        <span class="px-3 py-1 rounded-full text-xs font-bold method-{{ experiment.partition_method.name }}">
+            {{ experiment.partition_method.name }}
+        </span>
+        <h2 class="text-lg font-bold text-gray-800">{{ experiment.folder_name }}</h2>
+    </div>
+
+    <!-- ═══ PARAMÈTRES ═══ -->
+    <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 mb-6">
+        <div class="glass-card p-4 text-center">
+            <div class="text-xs text-gray-400">États</div>
+            <div class="text-2xl font-bold text-gray-800">{{ experiment.n_states }}</div>
+        </div>
+        <div class="glass-card p-4 text-center">
+            <div class="text-xs text-gray-400">NLT</div>
+            <div class="text-2xl font-bold text-gray-800">{{ experiment.nlt }}</div>
+        </div>
+        <div class="glass-card p-4 text-center">
+            <div class="text-xs text-gray-400">Step</div>
+            <div class="text-2xl font-bold text-gray-800">{{ experiment.step_size }}</div>
+        </div>
+        <div class="glass-card p-4 text-center">
+            <div class="text-xs text-gray-400">Start</div>
+            <div class="text-2xl font-bold text-gray-800">{{ experiment.start_index }}</div>
+        </div>
+        {% if experiment.matrix %}
+        <div class="glass-card p-4 text-center">
+            <div class="text-xs text-gray-400">P(rester)</div>
+            <div class="text-2xl font-bold text-green-600">{{ experiment.matrix.diagonal_mean|floatformat:4 }}</div>
+        </div>
+        <div class="glass-card p-4 text-center">
+            <div class="text-xs text-gray-400">Visités</div>
+            <div class="text-2xl font-bold text-gray-800">
+                {{ experiment.matrix.n_states_visited }}/{{ experiment.n_states }}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    {% if matrix_data and not matrix_data.error %}
+    <!-- ═══ MÉTRIQUES CLÉS ═══ -->
+    <div class="glass-card p-6 mb-6">
+        <h3 class="text-lg font-bold text-gray-800 mb-4">📊 Indicateurs Clés</h3>
+        
+        {% if experiment.matrix %}
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <!-- P(rester) -->
+            <div class="p-4 bg-white rounded-lg border border-gray-200">
+                <div class="text-xs font-semibold text-gray-600 mb-1">P(rester) — Diagonale</div>
+                <div class="text-2xl font-bold text-green-700">{{ matrix_data.diag_mean|floatformat:4 }}</div>
+                <div class="text-xs text-gray-500 mt-1">±{{ matrix_data.diag_std|floatformat:4 }}</div>
+                <div class="text-xs text-gray-400 mt-2">[{{ matrix_data.diag_min|floatformat:3 }}, {{ matrix_data.diag_max|floatformat:3 }}]</div>
+                <div class="text-xs text-gray-600 mt-2 leading-tight">Idéalement 0.5-0.9. Mesure la probabilité de rester dans la même cellule.</div>
+            </div>
+            
+            <!-- Normalisation -->
+            <div class="p-4 bg-white rounded-lg border border-gray-200">
+                <div class="text-xs font-semibold text-gray-600 mb-1">Σ Lignes — Normalisation</div>
+                <div class="text-2xl font-bold text-blue-700">{{ matrix_data.row_sum_mean|floatformat:4 }}</div>
+                <div class="text-xs text-gray-500 mt-1">σ={{ matrix_data.row_sum_std|floatformat:4 }}</div>
+                <div class="text-xs text-gray-400 mt-2">[{{ matrix_data.row_sum_min|floatformat:3 }}, {{ matrix_data.row_sum_max|floatformat:3 }}]</div>
+                <div class="text-xs text-gray-600 mt-2 leading-tight">Idéalement 1.0. Mesure si la matrice est stochastique.</div>
+            </div>
+            
+            <!-- Visitabilité -->
+            <div class="p-4 bg-white rounded-lg border border-gray-200">
+                <div class="text-xs font-semibold text-gray-600 mb-1">États Visités</div>
+                <div class="text-2xl font-bold text-purple-700">{{ matrix_data.fraction_visited|floatformat:1 }}%</div>
+                <div class="text-xs text-gray-500 mt-1">{{ matrix_data.n_visited }}/{{ matrix_data.shape.0 }} états</div>
+                <div class="text-xs text-gray-400 mt-2">—</div>
+                <div class="text-xs text-gray-600 mt-2 leading-tight">Idéalement ≈100%. Fraction d'états accessibles.</div>
+            </div>
+            
+            <!-- Convergence -->
+            <div class="p-4 bg-white rounded-lg border border-gray-200">
+                <div class="text-xs font-semibold text-gray-600 mb-1">Spectral Gap</div>
+                <div class="text-2xl font-bold {% if matrix_data.spectral_gap > 0.3 %}text-green-700{% elif matrix_data.spectral_gap > 0.1 %}text-yellow-700{% else %}text-red-700{% endif %}">
+                    {{ matrix_data.spectral_gap|floatformat:4 }}
+                </div>
+                <div class="text-xs text-gray-500 mt-1">λ₂={{ matrix_data.eigenvalue_2|floatformat:4 }}</div>
+                <div class="text-xs text-gray-400 mt-2">—</div>
+                <div class="text-xs text-gray-600 mt-2 leading-tight">Idéalement >0.3. Plus grand = convergence plus rapide.</div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+        <!-- Matrice P heatmap -->
+        <div class="glass-card p-5">
+            <h3 class="text-sm font-semibold text-gray-700 mb-3">🔥 Matrice de transition P</h3>
+            <div id="chart-heatmap" style="height:400px;"></div>
+        </div>
+
+        <!-- Diagonale -->
+        <div class="glass-card p-5">
+            <h3 class="text-sm font-semibold text-gray-700 mb-3">📊 Diagonale de P</h3>
+            <div id="chart-diagonal" style="height:400px;"></div>
+        </div>
+
+        <!-- Somme des lignes -->
+        <div class="glass-card p-5">
+            <h3 class="text-sm font-semibold text-gray-700 mb-3">📏 Somme des lignes</h3>
+            <div id="chart-rowsums" style="height:400px;"></div>
+        </div>
+
+        <!-- Spectre -->
+        <div class="glass-card p-5">
+            <h3 class="text-sm font-semibold text-gray-700 mb-3">🌈 Valeurs propres</h3>
+            <div id="chart-eigenvalues" style="height:400px;"></div>
+        </div>
+    </div>
+    {% elif matrix_data.error %}
+    <div class="glass-card p-5 mb-6">
+        <p class="text-red-500">❌ Erreur chargement matrice: {{ matrix_data.error }}</p>
+    </div>
+    {% endif %}
+
+    <!-- ═══ CONFIG BRUTE ═══ -->
+    <div class="glass-card p-5">
+        <h3 class="text-sm font-semibold text-gray-700 mb-3">⚙️ Configuration</h3>
+        <pre class="bg-gray-50 rounded-lg p-4 text-xs overflow-auto max-h-64">{{ experiment.raw_config|pprint }}</pre>
+    </div>
+</div>
+
+{% if matrix_data and not matrix_data.error %}
+<script>
+const plotConfig = {
+    responsive: true,
+    paper_bgcolor: 'rgba(0,0,0,0)',
+    plot_bgcolor: 'rgba(0,0,0,0)',
+    font: { size: 11 },
+    margin: { t: 10, b: 40, l: 50, r: 10 },
+};
+
+// Heatmap
+const heatmapData = {{ matrix_data.heatmap|safe }};
+Plotly.newPlot('chart-heatmap', [{
+    z: heatmapData,
+    type: 'heatmap',
+    colorscale: 'Viridis',
+    colorbar: { title: 'P', thickness: 12 },
+}], {
+    ...plotConfig,
+    xaxis: { title: 'Destination' },
+    yaxis: { title: 'Source', autorange: 'reversed' },
+});
+
+// Diagonale
+const diag = {{ matrix_data.diagonal|safe }};
+Plotly.newPlot('chart-diagonal', [{
+    y: diag,
+    type: 'bar',
+    marker: { color: '#3b82f6', opacity: 0.8 },
+}], {
+    ...plotConfig,
+    xaxis: { title: 'État' },
+    yaxis: { title: 'P(rester)' },
+    shapes: [{
+        type: 'line', x0: 0, x1: diag.length,
+        y0: diag.reduce((a,b) => a+b) / diag.length,
+        y1: diag.reduce((a,b) => a+b) / diag.length,
+        line: { color: 'red', dash: 'dash', width: 2 },
+    }],
+});
+
+// Row sums
+const rowSums = {{ matrix_data.row_sums|safe }};
+Plotly.newPlot('chart-rowsums', [{
+    y: rowSums,
+    type: 'bar',
+    marker: { color: '#10b981', opacity: 0.8 },
+}], {
+    ...plotConfig,
+    xaxis: { title: 'État' },
+    yaxis: { title: 'Σ lignes' },
+    shapes: [{
+        type: 'line', x0: 0, x1: rowSums.length, y0: 1, y1: 1,
+        line: { color: 'red', dash: 'dash', width: 2 },
+    }],
+});
+
+// Eigenvalues
+const eigenvalues = {{ matrix_data.eigenvalues|safe }};
+Plotly.newPlot('chart-eigenvalues', [{
+    y: eigenvalues,
+    mode: 'lines+markers',
+    marker: { color: '#8b5cf6', size: 6 },
+    line: { color: '#8b5cf6', width: 2 },
+}], {
+    ...plotConfig,
+    xaxis: { title: 'Index' },
+    yaxis: { title: '|λ|' },
+});
+</script>
+{% endif %}
+{% endblock %}

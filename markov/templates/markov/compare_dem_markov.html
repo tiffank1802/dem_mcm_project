@@ -1,0 +1,230 @@
+{% extends "markov/base.html" %}
+{% block title %}DEM vs Markov{% endblock %}
+
+{% block content %}
+<div class="fade-in">
+
+    <h2 class="text-xl font-bold text-gray-800 mb-6">
+        🔬 Comparaison DEM (réel) vs Markov (prédit)
+    </h2>
+
+    <div class="text-sm text-gray-600 mb-6">
+        <p>Validation des modèles Markoviens : comparaison des courbes RSD mesurées en DEM avec les prédictions du modèle Markov.</p>
+        <p class="mt-2"><strong>{{n_comparisons}}</strong> comparaisons disponibles</p>
+    </div>
+
+    <!-- ═══ TABLEAU DE COMPARAISON ═══ -->
+    <div class="glass-card p-6 mb-6">
+        <h3 class="text-lg font-semibold text-gray-800 mb-4">📊 Résumé des comparaisons</h3>
+        
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="border-b-2 border-gray-300">
+                        <th class="text-left px-3 py-2">Expérience</th>
+                        <th class="text-center px-3 py-2">RSD DEM final (%)</th>
+                        <th class="text-center px-3 py-2">RSD Markov final (%)</th>
+                        <th class="text-center px-3 py-2">Différence</th>
+                        <th class="text-center px-3 py-2">Erreur (%)</th>
+                        <th class="text-center px-3 py-2">t₅₀ DEM</th>
+                        <th class="text-center px-3 py-2">t₅₀ Markov</th>
+                    </tr>
+                </thead>
+                <tbody id="comparison-table">
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- ═══ COMPARAISON PAR PAIRE ═══ -->
+    <div id="comparison-plots" class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        <!-- Les graphiques seront générés par JavaScript -->
+    </div>
+
+    <!-- ═══ STATISTIQUES GLOBALES ═══ -->
+    <div class="glass-card p-6 mb-6">
+        <h3 class="text-lg font-semibold text-gray-800 mb-4">📈 Statistiques globales</h3>
+        
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div class="bg-blue-50 p-4 rounded-lg">
+                <div class="text-xs text-gray-600 mb-1">Erreur RSD finale (moy)</div>
+                <div class="text-2xl font-bold text-blue-600" id="stat-mean-error">-</div>
+                <div class="text-xs text-gray-500">en %</div>
+            </div>
+            <div class="bg-green-50 p-4 rounded-lg">
+                <div class="text-xs text-gray-600 mb-1">Meilleur modèle (erreur)</div>
+                <div class="text-sm font-bold text-green-600" id="stat-best">-</div>
+            </div>
+            <div class="bg-red-50 p-4 rounded-lg">
+                <div class="text-xs text-gray-600 mb-1">Pire modèle (erreur)</div>
+                <div class="text-sm font-bold text-red-600" id="stat-worst">-</div>
+            </div>
+            <div class="bg-purple-50 p-4 rounded-lg">
+                <div class="text-xs text-gray-600 mb-1">Écart-type (erreur)</div>
+                <div class="text-2xl font-bold text-purple-600" id="stat-std">-</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ LÉGENDE ═══ -->
+    <div class="glass-card p-4 bg-blue-50 border-l-4 border-blue-500">
+        <h4 class="font-semibold text-gray-800 mb-2">📌 Interprétation</h4>
+        <ul class="text-sm text-gray-700 space-y-1">
+            <li>• <strong>RSD final</strong> : Rarement Segregated Degree (%) au dernier pas de simulation</li>
+            <li>• <strong>Erreur (%)</strong> : |RSD_DEM - RSD_Markov| / RSD_DEM × 100</li>
+            <li>• <strong>t₅₀</strong> : Temps pour réduire le RSD initial de moitié (mixing time)</li>
+            <li>• Une erreur faible (&lt;10%) indique que le modèle Markov prédit bien le mélange</li>
+        </ul>
+    </div>
+
+</div>
+
+<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+<script>
+// Attendre que Plotly soit chargé
+function waitForPlotly(callback) {
+    if (typeof Plotly !== 'undefined') {
+        callback();
+    } else {
+        setTimeout(() => waitForPlotly(callback), 100);
+    }
+}
+
+waitForPlotly(function() {
+    const comparisonData = {{ comparison_data|safe }};
+    
+    if (!comparisonData || comparisonData.length === 0) {
+        console.warn('No comparison data available');
+        document.getElementById('comparison-plots').innerHTML = '<div class="text-gray-600 p-4">Aucune comparaison DEM/Markov disponible</div>';
+        return;
+    }
+
+    // Construire le tableau
+    const tableBody = document.getElementById('comparison-table');
+    comparisonData.forEach((row, idx) => {
+        const tr = document.createElement('tr');
+        const errorColor = row.rsd_final_relative < 10 ? 'green' : row.rsd_final_relative < 30 ? 'orange' : 'red';
+        
+        tr.innerHTML = `
+            <td class="px-3 py-2 text-gray-700">
+                <button onclick="scrollToPlot(${idx})" class="text-blue-600 hover:underline">
+                    ${row.method}
+                </button>
+            </td>
+            <td class="px-3 py-2 text-center text-gray-700">
+                <span class="bg-blue-100 px-2 py-1 rounded">${row.dem.rsd_final.toFixed(2)}</span>
+            </td>
+            <td class="px-3 py-2 text-center text-gray-700">
+                <span class="bg-purple-100 px-2 py-1 rounded">${row.markov.rsd_final.toFixed(2)}</span>
+            </td>
+            <td class="px-3 py-2 text-center">
+                <span class="text-gray-700">${row.rsd_final_diff.toFixed(2)}</span>
+            </td>
+            <td class="px-3 py-2 text-center">
+                <span class="px-2 py-1 rounded text-white bg-${errorColor}-500">
+                    ${row.rsd_final_relative.toFixed(1)}%
+                </span>
+            </td>
+            <td class="px-3 py-2 text-center text-gray-700">
+                ${row.dem.mixing_time_50 || '—'}
+            </td>
+            <td class="px-3 py-2 text-center text-gray-700">
+                ${row.markov.mixing_time_50 || '—'}
+            </td>
+        `;
+        tableBody.appendChild(tr);
+    });
+
+    // Construire les graphiques
+    const plotsContainer = document.getElementById('comparison-plots');
+    let plotCount = 0;
+    
+    comparisonData.forEach((row, idx) => {
+        if (row.dem.rsd_curve && row.dem.rsd_curve.length > 0 && 
+            row.markov.rsd_curve && row.markov.rsd_curve.length > 0) {
+            const div = document.createElement('div');
+            div.id = `plot-${idx}`;
+            div.style.height = '450px';
+            div.className = 'glass-card p-4';
+            plotsContainer.appendChild(div);
+            plotCount++;
+            
+            // Créer les traces
+            const nStepsDEM = row.dem.rsd_curve.length;
+            const nStepsMarkov = row.markov.rsd_curve.length;
+            
+            const trace1 = {
+                y: row.dem.rsd_curve,
+                x: Array.from({length: nStepsDEM}, (_, i) => i),
+                name: '🔬 DEM (réel)',
+                line: {color: '#1f77b4', width: 3, dash: 'solid'},
+                mode: 'lines'
+            };
+            
+            const trace2 = {
+                y: row.markov.rsd_curve,
+                x: Array.from({length: nStepsMarkov}, (_, i) => i),
+                name: '📊 Markov (prédit)',
+                line: {color: '#9467bd', width: 2, dash: 'dash'},
+                mode: 'lines'
+            };
+            
+            const layout = {
+                title: {text: `${row.method} — Erreur: ${row.rsd_final_relative.toFixed(1)}%`, font: {size: 14}},
+                xaxis: {title: 'Pas de simulation', zeroline: false},
+                yaxis: {title: 'RSD (%)', zeroline: false},
+                hovermode: 'x unified',
+                plot_bgcolor: '#f8f9fa',
+                paper_bgcolor: 'rgba(0,0,0,0)',
+                margin: {t: 40, b: 40, l: 60, r: 40},
+                font: {family: 'system-ui, -apple-system, sans-serif', size: 12},
+            };
+            
+            try {
+                Plotly.newPlot(div.id, [trace1, trace2], layout, {responsive: true});
+            } catch (e) {
+                console.error('Error plotting:', e);
+                div.innerHTML = '<div class="text-red-600 p-4">Erreur lors du rendu du graphique</div>';
+            }
+        }
+    });
+    
+    if (plotCount === 0) {
+        plotsContainer.innerHTML = '<div class="text-gray-600 p-4">Aucune courbe RSD disponible pour les comparaisons</div>';
+    }
+
+    // Calculer les statistiques
+    const errors = comparisonData.map(d => d.rsd_final_relative);
+    const meanError = errors.reduce((a, b) => a + b, 0) / errors.length;
+    const variance = errors.reduce((sum, e) => sum + Math.pow(e - meanError, 2), 0) / errors.length;
+    const stdError = Math.sqrt(variance);
+    const bestError = Math.min(...errors);
+    const worstError = Math.max(...errors);
+
+    document.getElementById('stat-mean-error').textContent = meanError.toFixed(1);
+    document.getElementById('stat-std').textContent = stdError.toFixed(1);
+    document.getElementById('stat-best').textContent = bestError.toFixed(1) + '%';
+    document.getElementById('stat-worst').textContent = worstError.toFixed(1) + '%';
+
+    function scrollToPlot(idx) {
+        const elem = document.getElementById(`plot-${idx}`);
+        if (elem) {
+            elem.scrollIntoView({behavior: 'smooth'});
+        }
+    }
+    
+    window.scrollToPlot = scrollToPlot;
+});
+</script>
+
+<style>
+    .fade-in {
+        animation: fadeIn 0.3s ease-in;
+    }
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+</style>
+
+{% endblock %}

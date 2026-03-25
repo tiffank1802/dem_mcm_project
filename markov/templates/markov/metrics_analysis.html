@@ -1,0 +1,161 @@
+{% extends "markov/base.html" %}
+{% block title %}Analyse des Métriques{% endblock %}
+
+{% block content %}
+<div class="fade-in">
+    <div class="flex items-center justify-between mb-6">
+        <h2 class="text-xl font-bold text-gray-800">📊 Analyse Détaillée des Métriques</h2>
+        <a href="/docs/METRICS_GUIDE.md" target="_blank" class="text-xs text-blue-600 hover:underline">📖 Guide des indicateurs</a>
+    </div>
+    
+    <div class="glass-card p-5 mb-6">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div>
+                <h3 class="font-bold text-gray-700 mb-2">🎯 Indicateurs Expliqués</h3>
+                <ul class="text-sm text-gray-600 space-y-1">
+                    <li><strong>P(rester):</strong> Probabilité moyenne de rester dans la même cellule (idéalement 0.5-0.9)</li>
+                    <li><strong>Σ lignes:</strong> Normalisation - idéalement = 1.0 partout</li>
+                    <li><strong>États visitées:</strong> Fraction des cellules accessibles (idéalement ≥95%)</li>
+                    <li><strong>Spectral gap:</strong> Écart spectral - mesure la vitesse de convergence (>0.3 = bon)</li>
+                </ul>
+            </div>
+            <div>
+                <h3 class="font-bold text-gray-700 mb-2">🔍 Filtrer par Méthode</h3>
+                <select id="methodFilter" class="border rounded-lg px-3 py-2 text-sm bg-white w-full"
+                        onchange="filterByMethod()">
+                    <option value="">Toutes les méthodes</option>
+                    {% for method in available_methods %}
+                    <option value="{{ method }}">{{ method }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tableau des métriques -->
+    <div class="glass-card p-5 overflow-x-auto">
+        <table class="w-full text-sm" id="metricsTable">
+            <thead class="bg-gray-100 sticky top-0">
+                <tr>
+                    <th class="p-2 text-left font-bold text-gray-700">Expérience</th>
+                    <th class="p-2 text-center">Méthode</th>
+                    <th class="p-2 text-center">États</th>
+                    <th class="p-2 text-center" title="Probabilité moyenne de rester dans le même état">P(rester)<br><small>μ ± σ</small></th>
+                    <th class="p-2 text-center" title="Normalisation des lignes - idéalement = 1">Σ lignes<br><small>[min, max]</small></th>
+                    <th class="p-2 text-center" title="Fraction d'états visités après convergence">États<br>visitées</th>
+                    <th class="p-2 text-center" title="2ème plus grande valeur propre - plus petit = plus rapide">λ₂<br>(convergence)</th>
+                    <th class="p-2 text-center" title="Spectral gap = 1 - λ₂ - plus grand = mieux">Spectral<br>gap</th>
+                </tr>
+            </thead>
+            <tbody id="metricsBody">
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Statistiques résumées -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
+        <div class="glass-card p-4">
+            <h3 class="font-bold text-gray-700 mb-2">📈 P(rester)</h3>
+            <p class="text-2xl font-bold text-blue-600" id="statDiagMean">—</p>
+            <p class="text-xs text-gray-500">Moyenne (idéalement 0.5-0.9)</p>
+        </div>
+        <div class="glass-card p-4">
+            <h3 class="font-bold text-gray-700 mb-2">🎯 Convergence</h3>
+            <p class="text-2xl font-bold text-green-600" id="statSpectralGap">—</p>
+            <p class="text-xs text-gray-500">Spectral gap (plus grand = mieux)</p>
+        </div>
+        <div class="glass-card p-4">
+            <h3 class="font-bold text-gray-700 mb-2">✅ Visitabilité</h3>
+            <p class="text-2xl font-bold text-purple-600" id="statVisited">—</p>
+            <p class="text-xs text-gray-500">Fraction moyenne d'états visités</p>
+        </div>
+    </div>
+</div>
+
+<script>
+const metricsRaw = JSON.parse('{{ metrics_data|escapejs }}');
+
+function createTable(data) {
+    const tbody = document.getElementById('metricsBody');
+    tbody.innerHTML = '';
+    
+    if (data.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" class="p-4 text-center text-gray-500">Aucune donnée</td></tr>';
+        updateStats([]);
+        return;
+    }
+    
+    data.forEach((metric, idx) => {
+        const row = document.createElement('tr');
+        row.className = idx % 2 === 0 ? 'bg-white' : 'bg-gray-50';
+        row.innerHTML = `
+            <td class="p-2">
+                <a href="/experiments/${metric.id}/" class="text-blue-600 hover:underline text-xs">
+                    ${metric.name}
+                </a>
+                <div class="text-xs text-gray-500">NLT=${metric.nlt}, n=${metric.n_states}</div>
+            </td>
+            <td class="p-2 text-center">
+                <span class="inline-block bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-medium">
+                    ${metric.method}
+                </span>
+            </td>
+            <td class="p-2 text-center font-mono">${metric.n_states}</td>
+            <td class="p-2 text-center font-mono">
+                <span class="font-bold text-green-700">${metric.diag_mean.toFixed(3)}</span> ± <span class="text-gray-600">${metric.diag_std.toFixed(3)}</span>
+                <div class="text-xs text-gray-500">${metric.diag_range}</div>
+            </td>
+            <td class="p-2 text-center font-mono text-sm">
+                μ=<span class="font-bold text-blue-700">${metric.row_sum_mean.toFixed(3)}</span>
+                <div class="text-xs text-gray-600">${metric.row_sum_range}</div>
+            </td>
+            <td class="p-2 text-center font-mono text-lg font-bold text-purple-700">
+                ${metric.fraction_visited}
+            </td>
+            <td class="p-2 text-center font-mono">
+                <span class="text-sm ${metric.eigenvalue_2 < 0.5 ? 'text-green-700' : metric.eigenvalue_2 < 0.7 ? 'text-yellow-700' : 'text-red-700'} font-bold">
+                    ${metric.eigenvalue_2.toFixed(4)}
+                </span>
+            </td>
+            <td class="p-2 text-center font-mono">
+                <span class="text-sm ${metric.spectral_gap > 0.3 ? 'text-green-700' : metric.spectral_gap > 0.1 ? 'text-yellow-700' : 'text-red-700'} font-bold">
+                    ${metric.spectral_gap.toFixed(4)}
+                </span>
+            </td>
+        `;
+        tbody.appendChild(row);
+    });
+    
+    updateStats(data);
+}
+
+function updateStats(data) {
+    if (data.length === 0) {
+        document.getElementById('statDiagMean').textContent = '—';
+        document.getElementById('statSpectralGap').textContent = '—';
+        document.getElementById('statVisited').textContent = '—';
+        return;
+    }
+    
+    const avgDiagMean = (data.reduce((s, d) => s + d.diag_mean, 0) / data.length).toFixed(3);
+    const avgSpectralGap = (data.reduce((s, d) => s + d.spectral_gap, 0) / data.length).toFixed(4);
+    const avgVisited = (data.reduce((s, d) => {
+        const frac = parseFloat(d.fraction_visited) / 100;
+        return s + frac;
+    }, 0) / data.length * 100).toFixed(1);
+    
+    document.getElementById('statDiagMean').textContent = avgDiagMean;
+    document.getElementById('statSpectralGap').textContent = avgSpectralGap;
+    document.getElementById('statVisited').textContent = avgVisited + '%';
+}
+
+function filterByMethod() {
+    const method = document.getElementById('methodFilter').value;
+    const filtered = method ? metricsRaw.filter(d => d.method === method) : metricsRaw;
+    createTable(filtered);
+}
+
+// Initialiser le tableau
+createTable(metricsRaw);
+</script>
+{% endblock %}

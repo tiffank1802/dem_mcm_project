@@ -1,0 +1,191 @@
+{% extends "markov/base.html" %}
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="fade-in">
+
+    <!-- ═══ STATS CARDS ═══ -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+
+        <div class="glass-card p-5">
+            <div class="text-xs font-medium text-gray-400 uppercase tracking-wider">Expériences</div>
+            <div class="text-3xl font-bold text-gray-800 mt-1">{{ stats.total_experiments }}</div>
+            <div class="text-xs text-gray-500 mt-1">modèles entraînés</div>
+        </div>
+
+        <div class="glass-card p-5">
+            <div class="text-xs font-medium text-gray-400 uppercase tracking-wider">Méthodes</div>
+            <div class="text-3xl font-bold text-gray-800 mt-1">{{ stats.total_methods }}</div>
+            <div class="text-xs text-gray-500 mt-1">types de partitionnement</div>
+        </div>
+
+        <div class="glass-card p-5">
+            <div class="text-xs font-medium text-gray-400 uppercase tracking-wider">P(rester) moyen</div>
+            <div class="text-3xl font-bold text-gray-800 mt-1">
+                {{ stats.avg_diagonal|floatformat:3|default:"—" }}
+            </div>
+            <div class="text-xs text-gray-500 mt-1">diagonale moyenne</div>
+        </div>
+
+        <div class="glass-card p-5">
+            <div class="text-xs font-medium text-gray-400 uppercase tracking-wider">NLT</div>
+            <div class="text-3xl font-bold text-gray-800 mt-1">
+                {{ stats.nlt_range.min }}–{{ stats.nlt_range.max }}
+            </div>
+            <div class="text-xs text-gray-500 mt-1">plage de Learning Time</div>
+        </div>
+    </div>
+
+    <!-- ═══ GRAPHIQUES ═══ -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+
+        <!-- Distribution par méthode -->
+        <div class="glass-card p-6">
+            <h3 class="text-sm font-semibold text-gray-700 mb-4">
+                📊 Distribution par méthode
+            </h3>
+            <div id="chart-methods" style="height: 300px;"></div>
+        </div>
+
+        <!-- Diagonale vs N_states -->
+        <div class="glass-card p-6">
+            <h3 class="text-sm font-semibold text-gray-700 mb-4">
+                📈 P(rester) vs Nombre d'états
+            </h3>
+            <div id="chart-diagonal" style="height: 300px;"></div>
+        </div>
+    </div>
+
+    <!-- ═══ PAR MÉTHODE ═══ -->
+    <h2 class="text-lg font-bold text-gray-800 mb-4">Méthodes de partitionnement</h2>
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+        {% for m in methods %}
+        <a href="{% url 'markov:experiment_list' %}?method={{ m.name }}"
+           class="glass-card p-5 hover:shadow-lg transition-all cursor-pointer group">
+            <div class="flex items-center gap-3 mb-3">
+                <span class="px-3 py-1 rounded-full text-xs font-bold method-{{ m.name }}">
+                    {{ m.name|upper }}
+                </span>
+                <span class="text-xs text-gray-400">{{ m.count }} expériences</span>
+            </div>
+            <div class="grid grid-cols-2 gap-2 text-xs text-gray-600">
+                <div>
+                    <span class="text-gray-400">Cellules moy:</span>
+                    {{ m.avg_cells|floatformat:0 }}
+                </div>
+                <div>
+                    <span class="text-gray-400">CV moy:</span>
+                    {{ m.avg_cv|floatformat:2|default:"—" }}
+                </div>
+            </div>
+            <div class="mt-2 text-xs text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                Voir les expériences →
+            </div>
+        </a>
+        {% endfor %}
+    </div>
+
+    <!-- ═══ RÉCENTES ═══ -->
+    <h2 class="text-lg font-bold text-gray-800 mb-4">Expériences récentes</h2>
+    <div class="glass-card overflow-hidden">
+        <table class="w-full text-sm">
+            <thead>
+                <tr class="border-b border-gray-100 text-xs text-gray-400 uppercase">
+                    <th class="px-4 py-3 text-left">Expérience</th>
+                    <th class="px-4 py-3 text-left">Méthode</th>
+                    <th class="px-4 py-3 text-right">États</th>
+                    <th class="px-4 py-3 text-right">NLT</th>
+                    <th class="px-4 py-3 text-right">Step</th>
+                    <th class="px-4 py-3 text-right">P(rester)</th>
+                    <th class="px-4 py-3 text-right">Σ lignes</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for exp in recent_experiments %}
+                <tr class="data-row border-b border-gray-50 cursor-pointer"
+                    onclick="window.location='{% url 'markov:experiment_detail' exp.pk %}'">
+                    <td class="px-4 py-3 font-medium text-gray-700">
+                        {{ exp.folder_name|truncatechars:40 }}
+                    </td>
+                    <td class="px-4 py-3">
+                        <span class="px-2 py-0.5 rounded-full text-xs font-bold
+                                     method-{{ exp.partition_method.name }}">
+                            {{ exp.partition_method.name }}
+                        </span>
+                    </td>
+                    <td class="px-4 py-3 text-right text-gray-600">{{ exp.n_states }}</td>
+                    <td class="px-4 py-3 text-right text-gray-600">{{ exp.nlt }}</td>
+                    <td class="px-4 py-3 text-right text-gray-600">{{ exp.step_size }}</td>
+                    <td class="px-4 py-3 text-right font-mono">
+                        {% if exp.matrix %}
+                            {{ exp.matrix.diagonal_mean|floatformat:4 }}
+                        {% else %}—{% endif %}
+                    </td>
+                    <td class="px-4 py-3 text-right font-mono text-xs">
+                        {% if exp.matrix %}
+                            [{{ exp.matrix.row_sum_min|floatformat:3 }},
+                             {{ exp.matrix.row_sum_max|floatformat:3 }}]
+                        {% else %}—{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+// ── Distribution par méthode ──
+const methodData = {{ method_distribution|safe }};
+Plotly.newPlot('chart-methods', [{
+    labels: methodData.map(d => d.partition_method__name),
+    values: methodData.map(d => d.count),
+    type: 'pie',
+    hole: 0.45,
+    marker: {
+        colors: ['#3b82f6', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#f97316']
+    },
+    textinfo: 'label+percent',
+    textposition: 'outside',
+}], {
+    margin: { t: 10, b: 10, l: 10, r: 10 },
+    paper_bgcolor: 'rgba(0,0,0,0)',
+    plot_bgcolor: 'rgba(0,0,0,0)',
+    font: { size: 11 },
+    showlegend: false,
+});
+
+// ── Diagonal vs N_states (chargé via API) ──
+fetch('{% url "markov:api_stats" %}')
+    .then(r => r.json())
+    .then(json => {
+        const data = json.data;
+        const methods = [...new Set(data.map(d => d.experiment__partition_method__name))];
+        const colors = {
+            cartesian: '#3b82f6', cylindrical: '#f59e0b',
+            voronoi: '#10b981', quantile: '#ef4444',
+            octree: '#8b5cf6', physics: '#f97316',
+        };
+
+        const traces = methods.map(m => ({
+            x: data.filter(d => d.experiment__partition_method__name === m)
+                   .map(d => d.experiment__n_states),
+            y: data.filter(d => d.experiment__partition_method__name === m)
+                   .map(d => d.diagonal_mean),
+            mode: 'markers',
+            name: m,
+            marker: { color: colors[m] || '#888', size: 8, opacity: 0.7 },
+        }));
+
+        Plotly.newPlot('chart-diagonal', traces, {
+            xaxis: { title: 'Nombre d\'états', type: 'log' },
+            yaxis: { title: 'P(rester) moyen' },
+            margin: { t: 10, b: 40, l: 50, r: 10 },
+            paper_bgcolor: 'rgba(0,0,0,0)',
+            plot_bgcolor: 'rgba(0,0,0,0)',
+            legend: { orientation: 'h', y: 1.1 },
+            font: { size: 11 },
+        });
+    });
+</script>
+{% endblock %}

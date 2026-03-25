@@ -1,0 +1,311 @@
+{% extends "markov/base.html" %}
+{% block title %}Comparaison des partitions{% endblock %}
+
+{% block content %}
+<div class="fade-in">
+    <h2 class="text-xl font-bold text-gray-800 mb-6">🔀 Comparaison des 5 méthodes de partitionnement</h2>
+
+    <div class="glass-card p-5 mb-6">
+        <p class="text-gray-600 text-sm mb-4">
+            Sélectionnez un fichier DEM et visualisez les 5 méthodes côte à côte pour comparer leurs performances.
+        </p>
+        <div class="flex flex-wrap gap-4 items-end" x-data="comparisonViewer()" x-init="init()">
+            <div>
+                <label class="text-xs text-gray-500 block mb-1">Fichier DEM (index)</label>
+                <input type="number" x-model="fileIndex" value="100"
+                       class="border rounded-lg px-3 py-2 text-sm w-28 bg-white">
+            </div>
+            <div>
+                <label class="text-xs text-gray-500 block mb-1">N cellules</label>
+                <input type="number" x-model="nCells" value="125"
+                       class="border rounded-lg px-3 py-2 text-sm w-28 bg-white">
+            </div>
+            <button @click="loadAllMethods()"
+                    :disabled="loading"
+                    :class="loading ? 'opacity-50 cursor-not-allowed' : ''"
+                    class="bg-blue-500 text-white px-6 py-2 rounded-lg text-sm font-medium hover:bg-blue-600">
+                <span x-text="loading ? '⏳ Chargement...' : '📊 Charger comparaison'"></span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Grid de comparaison 3x2 -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+        <!-- Cartesian -->
+        <div class="glass-card p-4">
+            <h3 class="text-sm font-bold text-gray-800 mb-2">Cartésien (5×5×5)</h3>
+            <div id="viewer-cartesian" style="height:500px; width:100%;"></div>
+            <div id="metrics-cartesian" class="mt-3 text-xs text-gray-600 space-y-1"></div>
+        </div>
+
+        <!-- Cylindrical -->
+        <div class="glass-card p-4">
+            <h3 class="text-sm font-bold text-gray-800 mb-2">Cylindrique (nr=3, nθ=4, nz=2)</h3>
+            <div id="viewer-cylindrical" style="height:500px; width:100%;"></div>
+            <div id="metrics-cylindrical" class="mt-3 text-xs text-gray-600 space-y-1"></div>
+        </div>
+
+        <!-- Quantile -->
+        <div class="glass-card p-4">
+            <h3 class="text-sm font-bold text-gray-800 mb-2">Quantile (5×5×5)</h3>
+            <div id="viewer-quantile" style="height:500px; width:100%;"></div>
+            <div id="metrics-quantile" class="mt-3 text-xs text-gray-600 space-y-1"></div>
+        </div>
+
+        <!-- Voronoi -->
+        <div class="glass-card p-4">
+            <h3 class="text-sm font-bold text-gray-800 mb-2">Voronoï (125 cellules)</h3>
+            <div id="viewer-voronoi" style="height:500px; width:100%;"></div>
+            <div id="metrics-voronoi" class="mt-3 text-xs text-gray-600 space-y-1"></div>
+        </div>
+
+        <!-- Octree -->
+        <div class="glass-card p-4">
+            <h3 class="text-sm font-bold text-gray-800 mb-2">Octree (adaptatif)</h3>
+            <div id="viewer-octree" style="height:500px; width:100%;"></div>
+            <div id="metrics-octree" class="mt-3 text-xs text-gray-600 space-y-1"></div>
+        </div>
+
+        <!-- Statistiques globales -->
+        <div class="glass-card p-4 lg:col-span-2">
+            <h3 class="text-sm font-bold text-gray-800 mb-3">📈 Statistiques comparées</h3>
+            <div id="comparison-stats" class="grid grid-cols-2 md:grid-cols-5 gap-3">
+                <div></div> <!-- Spacer for method names -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function comparisonViewer() {
+    return {
+        fileIndex: 100,
+        nCells: 125,
+        loading: false,
+        data: {},
+        
+        init() {
+            // Initialize empty plots
+            ['cartesian', 'cylindrical', 'quantile', 'voronoi', 'octree'].forEach(method => {
+                Plotly.newPlot(`viewer-${method}`, [], {
+                    scene: { 
+                        xaxis: { title: 'X', showgrid: false }, 
+                        yaxis: { title: 'Y', showgrid: false }, 
+                        zaxis: { title: 'Z', showgrid: false },
+                        aspectmode: 'data',
+                        bgcolor: 'rgb(250,250,252)',
+                        camera: { eye: { x: 1.5, y: 1.5, z: 1.2 } }
+                    },
+                    paper_bgcolor: 'rgba(0,0,0,0)',
+                    height: 500,
+                    margin: { t: 30, b: 0, l: 0, r: 0 },
+                });
+            });
+        },
+
+        async loadAllMethods() {
+            this.loading = true;
+            const methods = ['cartesian', 'cylindrical', 'quantile', 'voronoi', 'octree'];
+
+            console.log(`Loading ${methods.length} methods...`);
+            const promises = [];
+
+            for (const method of methods) {
+                const url = `/api/partitions/?file_index=${this.fileIndex}&method=${method}&n_cells=${this.nCells}`;
+                promises.push(
+                    fetch(url)
+                        .then(resp => resp.json())
+                        .then(data => ({ method, data }))
+                        .catch(e => ({ method, error: e.message }))
+                );
+            }
+
+            try {
+                const results = await Promise.all(promises);
+                
+                // Store data and render
+                results.forEach(result => {
+                    if (result.error) {
+                        console.error(`Erreur ${result.method}: ${result.error}`);
+                    } else {
+                        this.data[result.method] = result.data;
+                        this.renderMethod(result.method, result.data);
+                    }
+                });
+
+                // Render comparison stats
+                this.renderComparisonStats();
+                
+            } catch (e) {
+                alert('Erreur lors du chargement: ' + e.message);
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        renderMethod(method, data) {
+            const viewerId = `viewer-${method}`;
+            const metricsId = `metrics-${method}`;
+
+            // Create main particle trace
+            const traces = [{
+                x: data.x,
+                y: data.y,
+                z: data.z,
+                mode: 'markers',
+                type: 'scatter3d',
+                marker: {
+                    size: 2.5,
+                    color: data.states,
+                    colorscale: 'Viridis',
+                    cmin: 0,
+                    cmax: Math.max(data.n_cells - 1, 1),
+                    opacity: 0.8,
+                    colorbar: {
+                        title: 'Cell',
+                        thickness: 12,
+                        len: 0.4,
+                        x: 1.08,
+                        tickfont: { size: 10 }
+                    }
+                },
+                hovertemplate: 'Cell: %{marker.color:.0f}<br>x=%{x:.2f}<br>y=%{y:.2f}<br>z=%{z:.2f}<extra></extra>',
+            }];
+
+            Plotly.react(`viewer-${method}`, traces, {
+                scene: { 
+                    xaxis: { title: 'X', showgrid: false, showbackground: false }, 
+                    yaxis: { title: 'Y', showgrid: false, showbackground: false }, 
+                    zaxis: { title: 'Z', showgrid: false, showbackground: false },
+                    aspectmode: 'data',
+                    bgcolor: 'rgb(250,250,252)',
+                    camera: { eye: { x: 1.5, y: 1.5, z: 1.2 } }
+                },
+                title: `${data.n_cells} cells | ${data.n_particles} particles`,
+                paper_bgcolor: 'rgba(0,0,0,0)',
+                height: 500,
+                margin: { t: 30, b: 0, l: 0, r: 0 },
+                showlegend: false
+            });
+
+            // Compute and display metrics
+            this.computeMetrics(data, metricsId);
+        },
+
+        computeMetrics(data, metricsId) {
+            const states = data.states;
+            const nCells = data.n_cells;
+            
+            // Population per cell
+            const counts = new Array(nCells).fill(0);
+            states.forEach(s => counts[s]++);
+
+            // Statistics
+            const nonZero = counts.filter(c => c > 0);
+            const mean = nonZero.length > 0 ? nonZero.reduce((a, b) => a + b) / nonZero.length : 0;
+            const variance = nonZero.length > 0 ? 
+                nonZero.reduce((a, c) => a + Math.pow(c - mean, 2), 0) / nonZero.length : 0;
+            const std = Math.sqrt(variance);
+            const cv = mean > 0 ? std / mean : 0;
+            const min = Math.min(...counts);
+            const max = Math.max(...counts);
+            const sparsity = (counts.filter(c => c === 0).length / nCells * 100).toFixed(1);
+            const visited = counts.filter(c => c > 0).length;
+
+            const metricsHtml = `
+                <div class="space-y-1">
+                    <div><strong>Population:</strong> [${min}, ${max}], μ=${mean.toFixed(0)}</div>
+                    <div><strong>CV:</strong> ${cv.toFixed(3)} <span class="text-xs ${cv < 0.3 ? 'text-green-600' : cv < 0.5 ? 'text-yellow-600' : 'text-red-600'}">${cv < 0.3 ? '✓' : cv < 0.5 ? '⚠' : '✗'}</span></div>
+                    <div><strong>Empty:</strong> ${sparsity}%</div>
+                    <div><strong>Used:</strong> ${visited}/${nCells} (${(visited/nCells*100).toFixed(0)}%)</div>
+                </div>
+            `;
+            document.getElementById(metricsId).innerHTML = metricsHtml;
+        },
+
+        renderComparisonStats() {
+            const methods = ['cartesian', 'cylindrical', 'quantile', 'voronoi', 'octree'];
+            const stats = {};
+
+            methods.forEach(method => {
+                if (this.data[method]) {
+                    const data = this.data[method];
+                    const states = data.states;
+                    const nCells = data.n_cells;
+                    
+                    const counts = new Array(nCells).fill(0);
+                    states.forEach(s => counts[s]++);
+                    
+                    const nonZero = counts.filter(c => c > 0);
+                    const mean = nonZero.length > 0 ? nonZero.reduce((a, b) => a + b) / nonZero.length : 0;
+                    const variance = nonZero.length > 0 ? 
+                        nonZero.reduce((a, c) => a + Math.pow(c - mean, 2), 0) / nonZero.length : 0;
+                    const std = Math.sqrt(variance);
+                    const cv = mean > 0 ? std / mean : 0;
+                    const sparsity = counts.filter(c => c === 0).length / nCells * 100;
+
+                    stats[method] = { cv, sparsity, nCells, visited: nonZero.length };
+                }
+            });
+
+            // Create comparison table
+            let html = '<div class="space-y-3">';
+            
+            // Coefficient of variation comparison
+            html += '<div>';
+            html += '<strong class="block mb-2">📊 Coefficient de Variation (CV)</strong>';
+            html += '<div class="flex gap-2 mt-1">';
+            methods.forEach(m => {
+                if (stats[m]) {
+                    const cv = stats[m].cv;
+                    const color = cv < 0.3 ? 'bg-green-100 border-green-300' : cv < 0.5 ? 'bg-yellow-100 border-yellow-300' : 'bg-red-100 border-red-300';
+                    const textColor = cv < 0.3 ? 'text-green-700' : cv < 0.5 ? 'text-yellow-700' : 'text-red-700';
+                    html += `<div class="${color} border px-2 py-1.5 rounded text-center flex-1 text-xs">
+                        <div class="font-bold">${m}</div>
+                        <div class="${textColor}">${cv.toFixed(3)}</div>
+                    </div>`;
+                }
+            });
+            html += '</div></div>';
+
+            // Sparsity comparison
+            html += '<div>';
+            html += '<strong class="block mb-2">🔍 Cellules vides (%)</strong>';
+            html += '<div class="flex gap-2 mt-1">';
+            methods.forEach(m => {
+                if (stats[m]) {
+                    const sp = stats[m].sparsity;
+                    const color = sp < 10 ? 'bg-green-100 border-green-300' : sp < 30 ? 'bg-yellow-100 border-yellow-300' : 'bg-red-100 border-red-300';
+                    const textColor = sp < 10 ? 'text-green-700' : sp < 30 ? 'text-yellow-700' : 'text-red-700';
+                    html += `<div class="${color} border px-2 py-1.5 rounded text-center flex-1 text-xs">
+                        <div class="font-bold">${m}</div>
+                        <div class="${textColor}">${sp.toFixed(1)}%</div>
+                    </div>`;
+                }
+            });
+            html += '</div></div>';
+
+            // Cell utilization
+            html += '<div>';
+            html += '<strong class="block mb-2">🎯 Utilisation des cellules</strong>';
+            html += '<div class="flex gap-2 mt-1">';
+            methods.forEach(m => {
+                if (stats[m]) {
+                    const util = (stats[m].visited / stats[m].nCells * 100).toFixed(0);
+                    const color = util >= 80 ? 'bg-green-100 border-green-300' : util >= 50 ? 'bg-yellow-100 border-yellow-300' : 'bg-red-100 border-red-300';
+                    const textColor = util >= 80 ? 'text-green-700' : util >= 50 ? 'text-yellow-700' : 'text-red-700';
+                    html += `<div class="${color} border px-2 py-1.5 rounded text-center flex-1 text-xs">
+                        <div class="font-bold">${m}</div>
+                        <div class="${textColor}">${stats[m].visited}/${stats[m].nCells}</div>
+                    </div>`;
+                }
+            });
+            html += '</div></div>';
+
+            html += '</div>';
+            document.getElementById('comparison-stats').innerHTML = html;
+        }
+    };
+}
+</script>
+{% endblock %}

@@ -1,0 +1,691 @@
+{% extends "markov/base.html" %}
+{% block title %}Analyse Unifiée{% endblock %}
+
+{% block content %}
+<div style="display: flex; flex-direction: column; height: 100vh; overflow: hidden; background: linear-gradient(135deg, #f0f4ff 0%, #f8f9ff 100%);">
+    
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!-- BARRE DE TITRE FIXE ET TRANSPARENTE (TOP)                          -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    
+    <div style="position: fixed; top: 0; left: 0; right: 0; z-index: 50; backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); background: rgba(255, 255, 255, 0.7); border-bottom: 1px solid rgba(255, 255, 255, 0.6); box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08); padding: 16px 24px; height: 70px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; height: 100%;">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <span style="font-size: 28px;">🔬</span>
+                <div>
+                    <h1 style="margin: 0; font-size: 18px; font-weight: 700; color: #111827;">Analyse Comparative Complète</h1>
+                    <p style="margin: 2px 0 0 0; font-size: 12px; color: #6b7280;">Visualisez vos expériences Markov</p>
+                </div>
+            </div>
+            <div style="text-align: right;">
+                <span id="selected-count" style="font-size: 13px; font-weight: 600; color: #2563eb;">0 expériences sélectionnées</span>
+            </div>
+        </div>
+    </div>
+    
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!-- CONTENEUR PRINCIPAL À DEUX COLONNES (SCROLLABLES INDÉPENDANTES)    -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    
+    <div style="display: flex; flex: 1; margin-top: 70px; gap: 16px; overflow: hidden; padding: 16px;">
+        
+        <!-- COLONNE GAUCHE: PANNEAU DE CONTRÔLE (SCROLLABLE) -->
+        <div style="flex: 0 0 480px; overflow-y: auto; overflow-x: hidden; padding-right: 12px; scrollbar-width: thin; scrollbar-color: rgba(0,0,0,0.1) transparent;">
+            
+            <!-- Filtres -->
+            <div style="background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px); border: 1px solid rgba(255, 255, 255, 0.6); border-radius: 16px; padding: 20px; margin-bottom: 16px; box-shadow: 0 8px 32px rgba(31, 38, 135, 0.08);">
+                <details style="cursor: pointer;">
+                    <summary style="font-weight: 700; font-size: 15px; color: #1f2937; padding: 12px; margin: -12px -12px 0 -12px; display: flex; align-items: center; gap: 8px; user-select: none;">
+                        <span>🔽 Filtres Avancés</span>
+                    </summary>
+                    <div style="margin-top: 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <div>
+                            <label style="font-size: 12px; font-weight: 600; color: #374151; display: block; margin-bottom: 6px;">Méthode</label>
+                            <select id="method-filter" onchange="updateExperimentList()" style="width: 100%; padding: 8px 12px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; background: white; font-size: 13px;">
+                                <option value="">Toutes</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="font-size: 12px; font-weight: 600; color: #374151; display: block; margin-bottom: 6px;">NLT</label>
+                            <select id="nlt-filter" multiple onchange="updateExperimentList()" style="width: 100%; padding: 8px 12px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; background: white; font-size: 13px; min-height: 80px;"></select>
+                        </div>
+                        <div>
+                            <label style="font-size: 12px; font-weight: 600; color: #374151; display: block; margin-bottom: 6px;">Step Size</label>
+                            <select id="step-size-filter" multiple onchange="updateExperimentList()" style="width: 100%; padding: 8px 12px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; background: white; font-size: 13px; min-height: 80px;"></select>
+                        </div>
+                        <div>
+                            <label style="font-size: 12px; font-weight: 600; color: #374151; display: block; margin-bottom: 6px;">Start Index</label>
+                            <select id="start-index-filter" multiple onchange="updateExperimentList()" style="width: 100%; padding: 8px 12px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; background: white; font-size: 13px; min-height: 80px;"></select>
+                        </div>
+                        <div>
+                            <label style="font-size: 12px; font-weight: 600; color: #374151; display: block; margin-bottom: 6px;">N États</label>
+                            <select id="n-states-filter" multiple onchange="updateExperimentList()" style="width: 100%; padding: 8px 12px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; background: white; font-size: 13px; min-height: 80px;"></select>
+                        </div>
+                        <div>
+                            <label style="font-size: 12px; font-weight: 600; color: #374151; display: block; margin-bottom: 6px;">Trier par</label>
+                            <select id="sort-by" onchange="updateExperimentList()" style="width: 100%; padding: 8px 12px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; background: white; font-size: 13px;">
+                                <option value="method">Méthode</option>
+                                <option value="n_states">N États</option>
+                                <option value="nlt">NLT</option>
+                            </select>
+                        </div>
+                    </div>
+                </details>
+            </div>
+            
+            <!-- Sélection Expériences -->
+            <div style="background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px); border: 1px solid rgba(255, 255, 255, 0.6); border-radius: 16px; padding: 20px; margin-bottom: 16px; box-shadow: 0 8px 32px rgba(31, 38, 135, 0.08);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                    <h2 style="margin: 0; font-size: 15px; font-weight: 700; color: #1f2937;">📊 Expériences</h2>
+                    <div style="display: flex; gap: 6px;">
+                        <button onclick="selectAllExperiments()" style="padding: 6px 12px; background: #10b981; color: white; border: none; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.2s;">✓ Toutes</button>
+                        <button onclick="clearAllExperiments()" style="padding: 6px 12px; background: #6b7280; color: white; border: none; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.2s;">✗ Aucune</button>
+                    </div>
+                </div>
+                <div style="padding: 8px; background: rgba(59, 130, 246, 0.1); border-radius: 8px; margin-bottom: 12px; font-size: 12px; font-weight: 600; color: #1e40af;">
+                    <span id="experiment-counter">Sélectionnées: 0</span>
+                </div>
+                <div id="experiment-selector" style="display: grid; grid-template-columns: 1fr; gap: 8px; max-height: 400px; overflow-y: auto;">
+                    <div style="text-align: center; color: #9ca3af; padding: 20px;">⏳ Chargement...</div>
+                </div>
+            </div>
+            
+            <!-- Sélection Analyses -->
+            <div style="background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px); border: 1px solid rgba(255, 255, 255, 0.6); border-radius: 16px; padding: 20px; margin-bottom: 16px; box-shadow: 0 8px 32px rgba(31, 38, 135, 0.08);">
+                <h2 style="margin: 0 0 12px 0; font-size: 15px; font-weight: 700; color: #1f2937;">✨ Analyses</h2>
+                
+                <div style="margin-bottom: 12px;">
+                    <div style="font-size: 11px; font-weight: 700; color: #7c3aed; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">📈 Unique (par exp)</div>
+                    <div style="display: flex; flex-direction: column; gap: 6px;">
+                        <label style="display: flex; align-items: center; gap: 8px; padding: 8px; background: white; border: 1px solid rgba(147, 51, 234, 0.2); border-radius: 8px; cursor: pointer; font-size: 12px;">
+                            <input type="checkbox" class="analysis-checkbox" value="plot_experiment" checked style="width: 16px; height: 16px; cursor: pointer;">
+                            <span><strong>Plot Experiment</strong><br><span style="color: #6b7280; font-size: 11px;">6 subplots</span></span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 8px; padding: 8px; background: white; border: 1px solid rgba(147, 51, 234, 0.2); border-radius: 8px; cursor: pointer; font-size: 12px;">
+                            <input type="checkbox" class="analysis-checkbox" value="plot_matrix" style="width: 16px; height: 16px; cursor: pointer;">
+                            <span><strong>Plot Matrix</strong><br><span style="color: #6b7280; font-size: 11px;">Heatmap P</span></span>
+                        </label>
+                    </div>
+                </div>
+                
+                <div>
+                    <div style="font-size: 11px; font-weight: 700; color: #7c3aed; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">🔄 Comparaison (multi-exp)</div>
+                    <div style="display: flex; flex-direction: column; gap: 6px;">
+                        <label style="display: flex; align-items: center; gap: 8px; padding: 8px; background: white; border: 1px solid rgba(147, 51, 234, 0.2); border-radius: 8px; cursor: pointer; font-size: 12px;">
+                            <input type="checkbox" class="analysis-checkbox" value="compare_methods" checked style="width: 16px; height: 16px; cursor: pointer;">
+                            <span><strong>Methods</strong></span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 8px; padding: 8px; background: white; border: 1px solid rgba(147, 51, 234, 0.2); border-radius: 8px; cursor: pointer; font-size: 12px;">
+                            <input type="checkbox" class="analysis-checkbox" value="compare_rsd" style="width: 16px; height: 16px; cursor: pointer;">
+                            <span><strong>RSD</strong></span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 8px; padding: 8px; background: white; border: 1px solid rgba(147, 51, 234, 0.2); border-radius: 8px; cursor: pointer; font-size: 12px;">
+                            <input type="checkbox" class="analysis-checkbox" value="compare_mixing" style="width: 16px; height: 16px; cursor: pointer;">
+                            <span><strong>Mixing</strong></span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 8px; padding: 8px; background: white; border: 1px solid rgba(147, 51, 234, 0.2); border-radius: 8px; cursor: pointer; font-size: 12px;">
+                            <input type="checkbox" class="analysis-checkbox" value="compare_eigenvalues" style="width: 16px; height: 16px; cursor: pointer;">
+                            <span><strong>Eigenvalues</strong></span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 8px; padding: 8px; background: white; border: 1px solid rgba(147, 51, 234, 0.2); border-radius: 8px; cursor: pointer; font-size: 12px;">
+                            <input type="checkbox" class="analysis-checkbox" value="compare_within_method" style="width: 16px; height: 16px; cursor: pointer;">
+                            <span><strong>Within Method</strong></span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 8px; padding: 8px; background: white; border: 1px solid rgba(147, 51, 234, 0.2); border-radius: 8px; cursor: pointer; font-size: 12px;">
+                            <input type="checkbox" class="analysis-checkbox" value="rsd_vs_resolution" style="width: 16px; height: 16px; cursor: pointer;">
+                            <span><strong>RSD vs Résolution</strong></span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Paramètres -->
+            <div style="background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px); border: 1px solid rgba(255, 255, 255, 0.6); border-radius: 16px; padding: 20px; margin-bottom: 16px; box-shadow: 0 8px 32px rgba(31, 38, 135, 0.08);">
+                <details style="cursor: pointer;">
+                    <summary style="font-weight: 700; font-size: 15px; color: #1f2937; padding: 12px; margin: -12px -12px 0 -12px; display: flex; align-items: center; gap: 8px; user-select: none;">
+                        <span>⚙️ Paramètres</span>
+                    </summary>
+                    <div style="margin-top: 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <div>
+                            <label style="font-size: 12px; font-weight: 600; color: #374151; display: block; margin-bottom: 6px;">N Steps</label>
+                            <input type="number" id="param-n-steps" value="200" min="50" max="500" step="10" style="width: 100%; padding: 8px 12px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; font-size: 13px;">
+                        </div>
+                        <div>
+                            <label style="font-size: 12px; font-weight: 600; color: #374151; display: block; margin-bottom: 6px;">Width</label>
+                            <input type="number" id="param-figsize-w" value="16" min="8" max="24" style="width: 100%; padding: 8px 12px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; font-size: 13px;">
+                        </div>
+                        <div>
+                            <label style="font-size: 12px; font-weight: 600; color: #374151; display: block; margin-bottom: 6px;">Height</label>
+                            <input type="number" id="param-figsize-h" value="10" min="6" max="20" style="width: 100%; padding: 8px 12px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; font-size: 13px;">
+                        </div>
+                        <div>
+                            <label style="font-size: 12px; font-weight: 600; color: #374151; display: block; margin-bottom: 6px;">DEM Criterion</label>
+                            <select id="param-dem-criterion" style="width: 100%; padding: 8px 12px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; background: white; font-size: 13px;">
+                                <option>z_median</option>
+                                <option>z_half</option>
+                                <option>x_median</option>
+                                <option>y_median</option>
+                            </select>
+                        </div>
+                    </div>
+                </details>
+            </div>
+            
+            <!-- Boutons d'Action -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                <button onclick="generateAnalyses()" style="padding: 12px 16px; background: linear-gradient(135deg, #2563eb, #1d4ed8); color: white; border: none; border-radius: 8px; font-weight: 700; font-size: 13px; cursor: pointer; transition: all 0.2s; box-shadow: 0 4px 15px rgba(37, 99, 235, 0.3);">
+                    ✨ GÉNÉRER
+                </button>
+                <button onclick="showInfoModal()" style="padding: 12px 16px; background: rgba(107, 114, 128, 0.2); color: #374151; border: 1px solid rgba(107, 114, 128, 0.3); border-radius: 8px; font-weight: 600; font-size: 13px; cursor: pointer; transition: all 0.2s;">
+                    ℹ️ INFOS
+                </button>
+            </div>
+            
+            <!-- Progress Bar -->
+            <div id="generation-progress" style="display:none; margin-top: 12px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                    <span style="font-weight: 600; color: #374151; font-size: 12px;">Génération...</span>
+                    <span id="progress-text" style="font-size: 12px; color: #6b7280;">0%</span>
+                </div>
+                <div style="width: 100%; background: rgba(0,0,0,0.1); border-radius: 999px; height: 6px; overflow: hidden;">
+                    <div id="progress-fill" style="background: linear-gradient(90deg, #2563eb, #1d4ed8); height: 6px; width: 0%; transition: all 0.3s;"></div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- COLONNE DROITE: RÉSULTATS (SCROLLABLE) -->
+        <div style="flex: 1; overflow-y: auto; overflow-x: hidden; padding-right: 12px; scrollbar-width: thin; scrollbar-color: rgba(0,0,0,0.1) transparent;">
+            
+            <!-- Tabs Navigation -->
+            <div id="tabs-navigation" style="display: flex; gap: 8px; padding: 12px 16px; background: rgba(255, 255, 255, 0.7); backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px); border: 1px solid rgba(255, 255, 255, 0.6); border-radius: 12px; overflow-x: auto; margin-bottom: 16px; position: sticky; top: 0; z-index: 30;">
+                <!-- Les onglets seront insérés dynamiquement -->
+            </div>
+            
+            <!-- Tabs Content -->
+            <div id="tabs-content"></div>
+            
+            <!-- Message Initial -->
+            <div id="initial-message" style="background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px); border: 1px solid rgba(255, 255, 255, 0.6); border-radius: 16px; padding: 40px 32px; text-align: center; box-shadow: 0 8px 32px rgba(31, 38, 135, 0.08);">
+                <p style="margin: 0 0 12px 0; font-size: 16px; color: #6b7280;">👆 Configurez vos paramètres et cliquez sur <strong style="color: #1f2937;">GÉNÉRER</strong></p>
+                <p style="margin: 0; font-size: 14px; color: #9ca3af;">Les résultats apparaîtront ici</p>
+            </div>
+            
+            <!-- Download Button -->
+            <button onclick="downloadAllImages()" id="btn-download" style="display:none; position: sticky; bottom: 16px; margin-top: 16px; width: 100%; padding: 14px 16px; background: linear-gradient(135deg, #10b981, #059669); color: white; border: none; border-radius: 8px; font-weight: 700; font-size: 13px; cursor: pointer; box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3); transition: all 0.2s;">
+                📥 TÉLÉCHARGER TOUT (ZIP)
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- SCRIPTS JAVASCRIPT -->
+<script>
+let analysisState = {
+    experiments: [],
+    selectedExperimentIds: new Set(),
+    generatedImages: [],
+    currentImageIndex: {},
+    filterOptions: {
+        methods: [],
+        nlt_values: [],
+        step_size_values: [],
+        start_index_values: [],
+        n_states_values: []
+    }
+};
+
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('🚀 Page loaded, initializing...');
+    const msg = document.getElementById('initial-message');
+    if (msg) {
+        const p1 = msg.querySelector('p');
+        const p2 = msg.querySelectorAll('p')[1];
+        p1.textContent = '⏳ Chargement des expériences et initialisation du système...';
+        if (p2) p2.textContent = '(La première génération peut prendre 2-3 minutes)';
+    }
+    
+    loadFilterOptions();
+    loadExperiments();
+    
+    document.addEventListener('change', function(e) {
+        if (e.target.classList.contains('experiment-checkbox')) {
+            updateExperimentCounter();
+        }
+    });
+});
+
+async function loadFilterOptions() {
+    try {
+        console.log('📥 Loading filter options...');
+        const response = await fetch('/api/analysis/experiments/');
+        const data = await response.json();
+        console.log('✅ Filter options loaded:', data);
+        
+        if (data.status === 'success') {
+            analysisState.filterOptions = data.filters;
+            populateFilterDropdown('method-filter', data.filters.methods);
+            populateMultiSelectDropdown('nlt-filter', data.filters.nlt_values);
+            populateMultiSelectDropdown('step-size-filter', data.filters.step_size_values);
+            populateMultiSelectDropdown('start-index-filter', data.filters.start_index_values);
+            populateMultiSelectDropdown('n-states-filter', data.filters.n_states_values);
+        }
+    } catch (error) {
+        console.error('❌ Error loading filters:', error);
+    }
+}
+
+async function loadExperiments() {
+    try {
+        console.log('📥 Loading experiments...');
+        const method = document.getElementById('method-filter')?.value || '';
+        const nlt = getSelectedValues('nlt-filter').join(',');
+        const stepSize = getSelectedValues('step-size-filter').join(',');
+        const startIndex = getSelectedValues('start-index-filter').join(',');
+        const nStates = getSelectedValues('n-states-filter').join(',');
+        const sortBy = document.getElementById('sort-by')?.value || 'method';
+        
+        const params = new URLSearchParams({ method, nlt, step_size: stepSize, start_index: startIndex, n_states: nStates, sort_by: sortBy });
+        const response = await fetch(`/api/analysis/experiments/?${params}`);
+        const data = await response.json();
+        console.log('✅ Experiments loaded:', data);
+        
+        if (data.status === 'success') {
+            analysisState.experiments = data.experiments;
+            displayExperiments(data.experiments);
+        }
+    } catch (error) {
+        console.error('❌ Error loading experiments:', error);
+    }
+}
+
+async function updateExperimentList() {
+    await loadExperiments();
+    updateExperimentCounter();
+}
+
+function populateFilterDropdown(elementId, values) {
+    const select = document.getElementById(elementId);
+    if (!select) return;
+    const firstOption = select.querySelector('option[value=""]');
+    values.forEach(value => {
+        const option = document.createElement('option');
+        option.value = value;
+        option.textContent = value;
+        select.appendChild(option);
+    });
+}
+
+function populateMultiSelectDropdown(elementId, values) {
+    const select = document.getElementById(elementId);
+    if (!select) return;
+    select.innerHTML = '';
+    values.forEach(value => {
+        const option = document.createElement('option');
+        option.value = value;
+        option.textContent = value;
+        select.appendChild(option);
+    });
+}
+
+function displayExperiments(experiments) {
+    const selector = document.getElementById('experiment-selector');
+    if (!selector) return;
+    
+    if (experiments.length === 0) {
+        selector.innerHTML = '<div style="text-align: center; color: #9ca3af; padding: 20px;">Aucune expérience trouvée</div>';
+        return;
+    }
+    
+    selector.innerHTML = experiments.map(exp => `
+        <label style="display: flex; align-items: center; gap: 8px; padding: 8px; background: white; border: 1px solid rgba(0,0,0,0.08); border-radius: 8px; cursor: pointer; transition: all 0.2s;">
+            <input type="checkbox" class="experiment-checkbox" value="${exp.id}" ${analysisState.selectedExperimentIds.has(exp.id) ? 'checked' : ''} style="width: 16px; height: 16px; cursor: pointer;">
+            <div style="flex: 1;">
+                <div style="font-size: 12px; font-weight: 600; color: #1f2937;">${exp.folder_name}</div>
+                <div style="font-size: 11px; color: #6b7280;">${exp.method} | ${exp.n_states} états</div>
+            </div>
+        </label>
+    `).join('');
+}
+
+function selectAllExperiments() {
+    document.querySelectorAll('.experiment-checkbox').forEach(cb => cb.checked = true);
+    analysisState.experiments.forEach(exp => analysisState.selectedExperimentIds.add(exp.id));
+    updateExperimentCounter();
+}
+
+function clearAllExperiments() {
+    document.querySelectorAll('.experiment-checkbox').forEach(cb => cb.checked = false);
+    analysisState.selectedExperimentIds.clear();
+    updateExperimentCounter();
+}
+
+function updateExperimentCounter() {
+    const checked = Array.from(document.querySelectorAll('.experiment-checkbox:checked')).map(cb => parseInt(cb.value));
+    analysisState.selectedExperimentIds = new Set(checked);
+    const count = checked.length;
+    const total = analysisState.experiments.length;
+    document.getElementById('experiment-counter').textContent = `Sélectionnées: ${count}/${total}`;
+    document.getElementById('selected-count').textContent = `${count} expériences sélectionnées`;
+}
+
+function getSelectedValues(elementId) {
+    const select = document.getElementById(elementId);
+    if (!select) return [];
+    return Array.from(select.selectedOptions).map(opt => opt.value);
+}
+
+function getSelectedAnalyses() {
+    return Array.from(document.querySelectorAll('.analysis-checkbox:checked')).map(cb => ({
+        type: cb.value,
+        for_each_experiment: ['plot_experiment', 'plot_matrix'].includes(cb.value),
+        params: {}
+    }));
+}
+
+async function generateAnalyses() {
+    console.log('🔄 Generate button clicked');
+    const selectedExperimentIds = Array.from(analysisState.selectedExperimentIds);
+    const analyses = getSelectedAnalyses();
+    
+    console.log('Selected experiments:', selectedExperimentIds);
+    console.log('Selected analyses:', analyses);
+    
+    if (selectedExperimentIds.length === 0) {
+        alert('❌ Veuillez sélectionner au moins une expérience');
+        return;
+    }
+    
+    if (analyses.length === 0) {
+        alert('❌ Veuillez sélectionner au least une analyse');
+        return;
+    }
+    
+    const globalParams = {
+        figsize: [parseInt(document.getElementById('param-figsize-w').value), parseInt(document.getElementById('param-figsize-h').value)],
+        n_steps: parseInt(document.getElementById('param-n-steps').value),
+        dem_criterion: document.getElementById('param-dem-criterion').value,
+        export_format: 'PNG'
+    };
+    
+    console.log('Global params:', globalParams);
+    
+    showProgressBar();
+    const progressDiv = document.getElementById('generation-progress');
+    const genBtn = document.querySelector('button[onclick="generateAnalyses()"]');
+    if (genBtn) genBtn.disabled = true;
+    
+    const statusMsg = document.createElement('div');
+    statusMsg.style.cssText = 'padding: 12px 16px; background: rgba(37, 99, 235, 0.1); border: 1px solid rgba(37, 99, 235, 0.3); border-radius: 8px; margin-top: 12px; color: #1e40af; font-size: 13px; font-weight: 500;';
+    statusMsg.textContent = '⏳ Initialisation du système d\'analyse (peut prendre 2-3 min la première fois)...';
+    progressDiv.parentNode.insertBefore(statusMsg, progressDiv.nextSibling);
+    
+    try {
+        console.log('📤 Sending request to /api/analysis/generate-images/');
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 300000); // 5 min timeout
+        
+        const response = await fetch('/api/analysis/generate-images/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({
+                experiment_ids: selectedExperimentIds,
+                analyses: analyses,
+                global_params: globalParams
+            }),
+            signal: controller.signal
+        });
+        
+        clearTimeout(timeoutId);
+        const data = await response.json();
+        console.log('📥 API Response:', data);
+        
+        if (data.status === 'success') {
+            statusMsg.textContent = `✅ ${data.images.length} images générées en ${data.generation_time.toFixed(1)}s`;
+            statusMsg.style.background = 'rgba(16, 185, 129, 0.1)';
+            statusMsg.style.borderColor = 'rgba(16, 185, 129, 0.3)';
+            statusMsg.style.color = '#047857';
+            
+            analysisState.generatedImages = data.images;
+            displayResults(data.tabs_generated, data.images);
+            document.getElementById('btn-download').style.display = 'block';
+            document.getElementById('initial-message').style.display = 'none';
+        } else {
+            statusMsg.textContent = `⚠️ ${data.message}`;
+            statusMsg.style.background = 'rgba(217, 119, 6, 0.1)';
+            statusMsg.style.borderColor = 'rgba(217, 119, 6, 0.3)';
+            statusMsg.style.color = '#b45309';
+        }
+    } catch (error) {
+        statusMsg.textContent = `❌ Erreur réseau: ${error.message}. Vérifiez la console`;
+        statusMsg.style.background = 'rgba(239, 68, 68, 0.1)';
+        statusMsg.style.borderColor = 'rgba(239, 68, 68, 0.3)';
+        statusMsg.style.color = '#dc2626';
+        console.error('❌ Full error:', error);
+    } finally {
+        hideProgressBar();
+        if (genBtn) genBtn.disabled = false;
+        if (statusMsg.parentNode) {
+            setTimeout(() => statusMsg.style.opacity = '1', 100);
+        }
+    }
+}
+
+function displayResults(tabsGenerated, images) {
+    const navContainer = document.getElementById('tabs-navigation');
+    const contentContainer = document.getElementById('tabs-content');
+    
+    navContainer.innerHTML = tabsGenerated.map((tab, idx) => `
+        <button onclick="switchTab('${tab.tab_name}', this)" style="display: flex; align-items: center; gap: 6px; padding: 8px 14px; background: ${idx === 0 ? 'rgba(37, 99, 235, 0.15)' : 'transparent'}; color: ${idx === 0 ? '#1e40af' : '#6b7280'}; border: none; border-radius: 8px; font-weight: 600; font-size: 12px; cursor: pointer; transition: all 0.2s; white-space: nowrap;">
+            ${getTabIcon(tab.tab_name)} ${tab.tab_label} <span style="background: #ef4444; color: white; padding: 2px 6px; border-radius: 999px; font-size: 10px;">${tab.image_count}</span>
+        </button>
+    `).join('');
+    
+    const tabsContent = tabsGenerated.map((tab, idx) => {
+        const tabImages = images.filter(img => img.tab === tab.tab_name);
+        initialiseTabIndex(tab.tab_name, 0);
+        
+        return `
+            <div id="tab-${tab.tab_name}" style="display: ${idx === 0 ? 'block' : 'none'}; animation: fadeIn 0.3s ease-in;">
+                <div style="background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px); border: 1px solid rgba(255, 255, 255, 0.6); border-radius: 16px; padding: 20px; margin-bottom: 16px; box-shadow: 0 8px 32px rgba(31, 38, 135, 0.08);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                        <h2 style="margin: 0; font-size: 16px; font-weight: 700;">${getTabIcon(tab.tab_name)} ${tab.tab_label}</h2>
+                        <div style="display: flex; gap: 6px; align-items: center;">
+                            <button onclick="prevImage('${tab.tab_name}')" style="padding: 6px 10px; background: #6b7280; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px;">❮</button>
+                            <span style="padding: 6px 12px; background: rgba(37, 99, 235, 0.1); color: #1e40af; border-radius: 6px; font-size: 12px; font-weight: 600;" id="counter-${tab.tab_name}">Image 1 / ${tabImages.length}</span>
+                            <button onclick="nextImage('${tab.tab_name}')" style="padding: 6px 10px; background: #6b7280; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px;">❯</button>
+                        </div>
+                    </div>
+                    
+                    <div id="image-container-${tab.tab_name}" style="margin-bottom: 12px; border-radius: 12px; overflow: hidden; background: #f3f4f6; display: flex; align-items: center; justify-content: center; min-height: 300px;">
+                        ${tabImages.map((img, imgIdx) => `
+                            <img id="image-${tab.tab_name}-${imgIdx}" 
+                                 src="${img.image_base64}" 
+                                 alt="${img.title}"
+                                 style="max-width: 100%; height: auto; display: ${imgIdx === 0 ? 'block' : 'none'}; border-radius: 12px;">
+                        `).join('')}
+                    </div>
+                    
+                    <div style="padding: 12px; background: #f9fafb; border-radius: 8px; margin-bottom: 12px;">
+                        <div style="font-size: 12px; margin-bottom: 6px;"><strong>Titre:</strong> <span id="meta-title-${tab.tab_name}" style="color: #6b7280;"></span></div>
+                        <div style="font-size: 12px;"><strong>Expériences:</strong> <span id="meta-exps-${tab.tab_name}" style="color: #6b7280;"></span></div>
+                    </div>
+                    
+                    <button onclick="downloadImage('${tab.tab_name}', analysisState.currentImageIndex['${tab.tab_name}'])" style="padding: 8px 14px; background: #2563eb; color: white; border: none; border-radius: 6px; font-weight: 600; font-size: 12px; cursor: pointer; transition: all 0.2s;">
+                        💾 Télécharger
+                    </button>
+                </div>
+            </div>
+        `;
+    }).join('');
+    
+    contentContainer.innerHTML = tabsContent;
+    updateTabMetadata(tabsGenerated[0].tab_name, 0);
+}
+
+function initialiseTabIndex(tabName, index) {
+    analysisState.currentImageIndex[tabName] = index;
+}
+
+function updateTabMetadata(tabName, imageIndex) {
+    const images = analysisState.generatedImages.filter(img => img.tab === tabName);
+    if (imageIndex >= images.length) return;
+    const img = images[imageIndex];
+    document.getElementById(`meta-title-${tabName}`).textContent = img.title;
+    document.getElementById(`meta-exps-${tabName}`).textContent = img.experiment_names.join(', ');
+}
+
+function switchTab(tabName, button) {
+    document.querySelectorAll('[id^="tab-"]').forEach(tab => tab.style.display = 'none');
+    document.querySelectorAll('[id^="tabs-navigation"] button').forEach(btn => {
+        btn.style.background = 'transparent';
+        btn.style.color = '#6b7280';
+    });
+    
+    const tabContent = document.getElementById(`tab-${tabName}`);
+    if (tabContent) {
+        tabContent.style.display = 'block';
+        button.style.background = 'rgba(37, 99, 235, 0.15)';
+        button.style.color = '#1e40af';
+        updateTabMetadata(tabName, analysisState.currentImageIndex[tabName] || 0);
+    }
+}
+
+function nextImage(tabName) {
+    const images = analysisState.generatedImages.filter(img => img.tab === tabName);
+    if (images.length === 0) return;
+    analysisState.currentImageIndex[tabName] = (analysisState.currentImageIndex[tabName] + 1) % images.length;
+    displayImage(tabName, analysisState.currentImageIndex[tabName]);
+}
+
+function prevImage(tabName) {
+    const images = analysisState.generatedImages.filter(img => img.tab === tabName);
+    if (images.length === 0) return;
+    analysisState.currentImageIndex[tabName] = (analysisState.currentImageIndex[tabName] - 1 + images.length) % images.length;
+    displayImage(tabName, analysisState.currentImageIndex[tabName]);
+}
+
+function displayImage(tabName, imageIndex) {
+    const images = analysisState.generatedImages.filter(img => img.tab === tabName);
+    if (imageIndex >= images.length) return;
+    
+    const container = document.getElementById(`image-container-${tabName}`);
+    container.querySelectorAll('img').forEach(img => img.style.display = 'none');
+    document.getElementById(`image-${tabName}-${imageIndex}`).style.display = 'block';
+    document.getElementById(`counter-${tabName}`).textContent = `Image ${imageIndex + 1} / ${images.length}`;
+    updateTabMetadata(tabName, imageIndex);
+}
+
+function downloadImage(tabName, imageIndex) {
+    const images = analysisState.generatedImages.filter(img => img.tab === tabName);
+    if (imageIndex >= images.length) return;
+    const img = images[imageIndex];
+    const link = document.createElement('a');
+    link.href = img.image_base64;
+    link.download = `${img.type}_${img.experiment_names[0] || 'image'}.png`;
+    link.click();
+}
+
+function downloadAllImages() {
+    analysisState.generatedImages.forEach((img, idx) => {
+        setTimeout(() => {
+            const link = document.createElement('a');
+            link.href = img.image_base64;
+            link.download = `${idx + 1}_${img.type}_${img.experiment_names[0] || 'image'}.png`;
+            link.click();
+        }, idx * 200);
+    });
+}
+
+function showProgressBar() {
+    document.getElementById('generation-progress').style.display = 'block';
+    updateProgress(0);
+}
+
+function hideProgressBar() {
+    document.getElementById('generation-progress').style.display = 'none';
+}
+
+function updateProgress(percent) {
+    document.getElementById('progress-fill').style.width = percent + '%';
+    document.getElementById('progress-text').textContent = percent + '%';
+}
+
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+function getTabIcon(tabName) {
+    const icons = {
+        'experiments': '📊',
+        'compare': '⚖️',
+        'rsd': '📉',
+        'mixing': '🌀',
+        'eigenvalues': '🔢',
+        'dem_markov': '🔬'
+    };
+    return icons[tabName] || '📈';
+}
+
+function showInfoModal() {
+    alert('ℹ️ Analyse Comparative Complète\n\n' +
+          'Cette interface permet de:\n' +
+          '• Sélectionner plusieurs expériences avec filtres avancés\n' +
+          '• Choisir plusieurs types d\'analyses\n' +
+          '• Générer des visualisations matplotlib\n' +
+          '• Télécharger les images résultantes\n\n' +
+          'Les analyses single-experiment génèrent une image par expérience.\n' +
+          'Les analyses multi-experiment comparent toutes les expériences sélectionnées.');
+}
+</script>
+
+<style>
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+details > summary::-webkit-details-marker {
+    display: none;
+}
+
+details[open] > summary span::before {
+    content: '▼ ';
+}
+
+details:not([open]) > summary span::before {
+    content: '▶ ';
+}
+
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.1);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 0, 0, 0.2);
+}
+</style>
+
+{% endblock %}

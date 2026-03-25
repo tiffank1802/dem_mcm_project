@@ -1,0 +1,109 @@
+{% extends "markov/base.html" %}
+{% block title %}Analyse RSD{% endblock %}
+
+{% block content %}
+<div class="fade-in">
+    <h2 class="text-xl font-bold text-gray-800 mb-6">📉 Analyse RSD — Relative Standard Deviation</h2>
+
+    <!-- Sélecteur -->
+    <div class="glass-card p-5 mb-6">
+        <form method="get" class="flex flex-wrap gap-4 items-end">
+            <div class="flex-1">
+                <label class="text-xs text-gray-500 block mb-1">Expériences à comparer</label>
+                <select name="ids" multiple size="8"
+                        class="border rounded-lg px-3 py-2 text-sm bg-white w-full">
+                    {% for exp in all_experiments %}
+                    <option value="{{ exp.id }}"
+                        {% if exp.id|stringformat:"d" in selected_ids %}selected{% endif %}>
+                        [{{ exp.partition_method__name }}] {{ exp.folder_name|truncatechars:50 }}
+                        ({{ exp.n_states }} états)
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="text-xs text-gray-500 block mb-1">Pas de simulation</label>
+                <input type="number" name="n_steps" value="{{ n_steps }}"
+                       class="border rounded-lg px-3 py-2 text-sm w-28 bg-white">
+            </div>
+            <button type="submit"
+                    class="bg-blue-500 text-white px-6 py-2 rounded-lg text-sm font-medium hover:bg-blue-600">
+                📉 Analyser
+            </button>
+        </form>
+    </div>
+
+    <!-- Graphiques -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        <div class="glass-card p-5">
+            <h3 class="text-sm font-semibold text-gray-700 mb-3">RSD au cours du temps</h3>
+            <div id="chart-rsd" style="height:400px;"></div>
+        </div>
+        <div class="glass-card p-5">
+            <h3 class="text-sm font-semibold text-gray-700 mb-3">Entropie normalisée</h3>
+            <div id="chart-entropy" style="height:400px;"></div>
+        </div>
+        <div class="glass-card p-5">
+            <h3 class="text-sm font-semibold text-gray-700 mb-3">RSD (échelle log)</h3>
+            <div id="chart-rsd-log" style="height:400px;"></div>
+        </div>
+        <div class="glass-card p-5">
+            <h3 class="text-sm font-semibold text-gray-700 mb-3">Résumé</h3>
+            <div id="summary-table"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+const data = {{ rsd_comparison|safe }};
+const cfg = {
+    paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)',
+    font: { size: 11 }, margin: { t: 10, b: 40, l: 50, r: 10 },
+    hovermode: 'x unified',
+};
+const colors = ['#3b82f6','#f59e0b','#10b981','#ef4444','#8b5cf6','#f97316','#06b6d4','#ec4899'];
+
+if (data.length > 0) {
+    // RSD
+    Plotly.newPlot('chart-rsd', data.map((d, i) => ({
+        y: d.rsd_percent, mode: 'lines', name: `${d.method} (${d.n_states})`,
+        line: { color: colors[i % colors.length], width: 2 },
+    })), { ...cfg, xaxis: { title: 'Pas' }, yaxis: { title: 'RSD (%)' } });
+
+    // Entropy
+    Plotly.newPlot('chart-entropy', data.map((d, i) => ({
+        y: d.entropy, mode: 'lines', name: `${d.method} (${d.n_states})`,
+        line: { color: colors[i % colors.length], width: 2 },
+    })), { ...cfg, xaxis: { title: 'Pas' }, yaxis: { title: 'Entropie', range: [0, 1.05] },
+           shapes: [{ type: 'line', x0: 0, x1: data[0].rsd_percent.length, y0: 1, y1: 1,
+                       line: { color: 'gray', dash: 'dot' } }] });
+
+    // RSD log
+    Plotly.newPlot('chart-rsd-log', data.map((d, i) => ({
+        y: d.rsd_percent.map(v => Math.max(v, 0.001)), mode: 'lines',
+        name: `${d.method} (${d.n_states})`,
+        line: { color: colors[i % colors.length], width: 2 },
+    })), { ...cfg, xaxis: { title: 'Pas' }, yaxis: { title: 'RSD (%)', type: 'log' } });
+
+    // Table
+    let html = `<table class="w-full text-xs">
+        <thead><tr class="border-b text-gray-400">
+            <th class="py-2 text-left">Méthode</th><th class="text-right">États</th>
+            <th class="text-right">RSD₀%</th><th class="text-right">RSD_f%</th>
+            <th class="text-right">t₅₀</th><th class="text-right">t₉₀</th>
+        </tr></thead><tbody>`;
+    data.forEach(d => {
+        html += `<tr class="border-b border-gray-50">
+            <td class="py-2"><span class="px-2 py-0.5 rounded-full text-xs font-bold method-${d.method}">${d.method}</span> ${d.name.substring(0,20)}</td>
+            <td class="text-right font-mono">${d.n_states}</td>
+            <td class="text-right font-mono">${d.rsd_initial.toFixed(1)}</td>
+            <td class="text-right font-mono font-bold">${d.rsd_final.toFixed(1)}</td>
+            <td class="text-right font-mono">${d.mixing_time_50 ?? 'N/A'}</td>
+            <td class="text-right font-mono">${d.mixing_time_90 ?? 'N/A'}</td>
+        </tr>`;
+    });
+    html += '</tbody></table>';
+    document.getElementById('summary-table').innerHTML = html;
+}
+</script>
+{% endblock %}

@@ -1,0 +1,13 @@
+# requirements.txt
+django>=5.0
+djangorestframework
+django-filter
+django-htmx
+whitenoise
+gunicorn
+numpy<2
+huggingface_hub
+polars
+plotly
+scipy
+scikit-learn

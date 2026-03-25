@@ -1,0 +1,408 @@
+{% extends "markov/base.html" %}
+{% block title %}Visualisation 3D - Partitionnement{% endblock %}
+
+{% block content %}
+<div class="fade-in">
+    <div class="mb-8">
+        <div class="flex items-center justify-between mb-2">
+            <h1 class="text-3xl font-bold text-gray-900">🎨 Visualisation 3D - Partitionnement Spatial</h1>
+            <a href="{% url 'markov:partitioner_3d_trame' %}" class="px-4 py-2 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-lg font-semibold hover:shadow-lg transition text-sm">
+                🔬 Passer au rendu Trame/vtk.js →
+            </a>
+        </div>
+        <p class="text-gray-600">Choisissez une méthode de partitionnement, réglez les paramètres, et visualisez le résultat en temps réel.</p>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        <!-- ═══ CONTRÔLES PARAMÈTRES ═══ -->
+        <div class="lg:col-span-1">
+            <div class="glass-card p-6 sticky top-6">
+                <h2 class="text-lg font-bold text-gray-800 mb-4">⚙️ Paramètres</h2>
+
+                <!-- Sélecteur de méthode -->
+                <div class="mb-6">
+                    <label class="text-sm font-semibold text-gray-700 block mb-2">Méthode de Partitionnement</label>
+                    <select id="method-select" class="w-full px-4 py-2 border border-gray-300 rounded-lg bg-white" onchange="changeMethod()">
+                        <option value="cartesian">Cartésien</option>
+                        <option value="cylindrical">Cylindrique</option>
+                        <option value="voronoi" selected>Voronoï</option>
+                        <option value="quantile">Quantile</option>
+                        <option value="octree">Octree</option>
+                        <option value="physics">Physics-Aware</option>
+                    </select>
+                </div>
+
+                <!-- Description -->
+                <div id="method-description" class="p-3 bg-blue-50 rounded-lg border border-blue-200 mb-6 text-xs text-gray-700"></div>
+
+                <!-- Paramètres dynamiques -->
+                <div id="parameters-container" class="space-y-4 mb-6"></div>
+
+                <!-- Sélecteur de fichier DEM -->
+                <div class="mb-6 border-t pt-4">
+                    <label class="text-sm font-semibold text-gray-700 block mb-2">🔬 Snapshot DEM</label>
+                    <div class="flex gap-2">
+                        <input type="number" id="file-index" value="100" min="0" max="1000" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg">
+                        <button onclick="updateVisualization()" class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600">Charger</button>
+                    </div>
+                </div>
+
+                <!-- Bouton de visualisation -->
+                <button onclick="generateVisualization()" class="w-full px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg font-semibold hover:shadow-lg transition">
+                    🎬 Générer Visualisation
+                </button>
+
+                <!-- Stats affichage -->
+                <div id="stats-container" class="mt-6 p-4 bg-gray-50 rounded-lg border border-gray-200 hidden">
+                    <h3 class="text-sm font-semibold text-gray-700 mb-3">📊 Statistiques</h3>
+                    <div id="stats-content" class="space-y-2 text-xs"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══ VISUALISATION 3D ═══ -->
+        <div class="lg:col-span-3">
+            <div class="glass-card p-6">
+                <h2 class="text-lg font-bold text-gray-800 mb-4">3D Viewer</h2>
+                <div id="plotly-3d" style="height: 600px; width: 100%; border-radius: 12px; overflow: hidden;"></div>
+                <div id="loading-spinner" class="hidden text-center py-12">
+                    <div class="inline-block animate-spin">⏳</div>
+                    <p class="text-gray-500 mt-2">Chargement des données...</p>
+                </div>
+            </div>
+
+            <!-- ═══ POPULATION HISTOGRAM ═══ -->
+            <div class="glass-card p-6 mt-6">
+                <h2 class="text-lg font-bold text-gray-800 mb-4">📈 Distribution des Populations</h2>
+                <div id="population-histogram" style="height: 300px;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ TABLEAU DE COMPARAISON DEM vs MARKOV ═══ -->
+    <div class="glass-card p-6 mt-8">
+        <h2 class="text-xl font-bold text-gray-800 mb-4">🔬 Comparaison avec le Modèle Markov (DEM vs Markov)</h2>
+        
+        <div class="mb-6">
+            <label class="text-sm font-semibold text-gray-700 block mb-2">Sélectionner une Expérience</label>
+            <select id="experiment-select" class="w-full px-4 py-2 border border-gray-300 rounded-lg bg-white" onchange="loadDEMMarkovComparison()">
+                <option value="">Charger les expériences...</option>
+            </select>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- Données DEM -->
+            <div class="p-4 bg-orange-50 border border-orange-200 rounded-lg">
+                <h3 class="font-semibold text-gray-800 mb-3">Simulation DEM (Réelle)</h3>
+                <div id="dem-data" class="space-y-2 text-sm">
+                    <p class="text-gray-500">Aucune donnée</p>
+                </div>
+            </div>
+
+            <!-- Données Markov -->
+            <div class="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <h3 class="font-semibold text-gray-800 mb-3">Modèle Markov (Prédiction)</h3>
+                <div id="markov-data" class="space-y-2 text-sm">
+                    <p class="text-gray-500">Aucune donnée</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+<script>
+// ═════════════════════════════════════════════════════════════
+// ÉTAT GLOBAL
+// ═════════════════════════════════════════════════════════════
+
+let currentMethod = 'voronoi';
+let currentPlotData = null;
+let partitionerSchemas = {};
+
+// ═════════════════════════════════════════════════════════════
+// INITIALISATION
+// ═════════════════════════════════════════════════════════════
+
+window.addEventListener('DOMContentLoaded', async () => {
+    // Charger les schémas
+    await loadPartitionerSchemas();
+    changeMethod();
+    
+    // Charger les expériences
+    loadExperimentsList();
+    
+    // Afficher la visualisation par défaut
+    updateVisualization();
+});
+
+async function loadPartitionerSchemas() {
+    try {
+        const response = await fetch('/api/partitioner/schemas/');
+        const data = await response.json();
+        partitionerSchemas = data.schemas;
+    } catch (e) {
+        console.error('Error loading schemas:', e);
+    }
+}
+
+async function loadExperimentsList() {
+    try {
+        // Charger depuis la BD les expériences disponibles
+        const response = await fetch('/api/tab/dem-markov/');
+        const data = await response.json();
+        
+        const select = document.getElementById('experiment-select');
+        select.innerHTML = '<option value="">Choisir une expérience...</option>';
+        
+        data.dem_markov_data.forEach(exp => {
+            const option = document.createElement('option');
+            option.value = exp.id;
+            option.textContent = exp.name.substring(0, 50);
+            select.appendChild(option);
+        });
+    } catch (e) {
+        console.error('Error loading experiments:', e);
+    }
+}
+
+// ═════════════════════════════════════════════════════════════
+// CHANGEMENT DE MÉTHODE
+// ═════════════════════════════════════════════════════════════
+
+function changeMethod() {
+    currentMethod = document.getElementById('method-select').value;
+    const schema = partitionerSchemas[currentMethod];
+    
+    if (!schema) return;
+    
+    // Afficher description
+    document.getElementById('method-description').innerHTML = 
+        `<strong>${schema.label}</strong><br>${schema.description}`;
+    
+    // Générer les paramètres
+    const container = document.getElementById('parameters-container');
+    container.innerHTML = '';
+    
+    Object.entries(schema.parameters).forEach(([paramName, paramSpec]) => {
+        const div = document.createElement('div');
+        
+        if (paramSpec.type === 'select') {
+            div.innerHTML = `
+                <label class="text-xs font-semibold text-gray-700 block mb-1">${paramSpec.label}</label>
+                <select id="param-${paramName}" class="w-full px-3 py-2 border border-gray-300 rounded text-sm">
+                    ${paramSpec.options.map(opt => `<option value="${opt}" ${opt === paramSpec.default ? 'selected' : ''}>${opt}</option>`).join('')}
+                </select>
+                <p class="text-xs text-gray-500 mt-1">${paramSpec.help}</p>
+            `;
+        } else {
+            div.innerHTML = `
+                <label class="text-xs font-semibold text-gray-700 block mb-1">
+                    ${paramSpec.label}
+                    <span id="val-${paramName}" class="text-blue-600 font-bold">${paramSpec.default}</span>
+                </label>
+                <input type="range" id="param-${paramName}" 
+                       min="${paramSpec.min}" max="${paramSpec.max}" value="${paramSpec.default}"
+                       class="w-full" onchange="updateParamDisplay('${paramName}')">
+                <p class="text-xs text-gray-500 mt-1">${paramSpec.help}</p>
+            `;
+        }
+        
+        container.appendChild(div);
+    });
+}
+
+function updateParamDisplay(paramName) {
+    const input = document.getElementById(`param-${paramName}`);
+    const display = document.getElementById(`val-${paramName}`);
+    if (display) display.textContent = input.value;
+}
+
+// ═════════════════════════════════════════════════════════════
+// GÉNÉRATION DE LA VISUALISATION
+// ═════════════════════════════════════════════════════════════
+
+async function updateVisualization() {
+    await generateVisualization();
+}
+
+async function generateVisualization() {
+    const spinner = document.getElementById('loading-spinner');
+    spinner.classList.remove('hidden');
+    
+    try {
+        // Récupérer les paramètres
+        const schema = partitionerSchemas[currentMethod];
+        const params = new URLSearchParams();
+        params.append('method', currentMethod);
+        params.append('file_index', document.getElementById('file-index').value);
+        
+        Object.keys(schema.parameters).forEach(paramName => {
+            const input = document.getElementById(`param-${paramName}`);
+            if (input) {
+                params.append(paramName, input.value);
+            }
+        });
+        
+        // Appeler l'API
+        const response = await fetch(`/api/partitioner/3d-data/?${params}`);
+        const data = await response.json();
+        
+        if (!data.success) {
+            alert('Erreur: ' + (data.error || 'Erreur inconnue'));
+            spinner.classList.add('hidden');
+            return;
+        }
+        
+        currentPlotData = data;
+        
+        // Afficher les stats
+        showStatistics(data.statistics);
+        
+        // Plotly 3D scatter plot
+        plot3DVisualization(data);
+        
+        // Histogram
+        plotPopulationHistogram(data.plot_data);
+        
+    } catch (e) {
+        console.error('Error:', e);
+        alert('Erreur lors de la génération: ' + e.message);
+    } finally {
+        spinner.classList.add('hidden');
+    }
+}
+
+function showStatistics(stats) {
+    const container = document.getElementById('stats-container');
+    const content = document.getElementById('stats-content');
+    
+    content.innerHTML = `
+        <div class="flex justify-between items-center">
+            <span class="text-gray-600">Particules:</span>
+            <span class="font-bold text-gray-800">${stats.n_particles}</span>
+        </div>
+        <div class="flex justify-between items-center">
+            <span class="text-gray-600">Cellules:</span>
+            <span class="font-bold text-gray-800">${stats.n_states}</span>
+        </div>
+        <div class="flex justify-between items-center">
+            <span class="text-gray-600">Visités:</span>
+            <span class="font-bold text-green-600">${stats.n_visited}/${stats.n_states}</span>
+        </div>
+        <div class="flex justify-between items-center">
+            <span class="text-gray-600">CV:</span>
+            <span class="font-bold text-blue-600">${stats.cv.toFixed(3)}</span>
+        </div>
+        <div class="flex justify-between items-center">
+            <span class="text-gray-600">Moy. pop:</span>
+            <span class="font-bold text-gray-800">${stats.population_mean.toFixed(1)}</span>
+        </div>
+    `;
+    
+    container.classList.remove('hidden');
+}
+
+function plot3DVisualization(data) {
+    const plot_data = data.plot_data;
+    
+    const trace = {
+        x: plot_data.x,
+        y: plot_data.y,
+        z: plot_data.z,
+        mode: 'markers',
+        type: 'scatter3d',
+        marker: {
+            size: 4,
+            color: plot_data.states,
+            colorscale: 'Viridis',
+            showscale: true,
+            colorbar: { title: 'Cellule' }
+        },
+        text: plot_data.states.map((s, i) => `Cellule ${s}`),
+        hovertemplate: '<b>Cellule %{text}</b><br>X: %{x:.2f}<br>Y: %{y:.2f}<br>Z: %{z:.2f}<extra></extra>'
+    };
+    
+    const layout = {
+        title: `Partitionnement ${data.method.toUpperCase()} (${data.statistics.n_states} cellules)`,
+        scene: {
+            xaxis: { title: 'X' },
+            yaxis: { title: 'Y' },
+            zaxis: { title: 'Z' }
+        },
+        height: 600,
+        margin: { l: 0, r: 0, t: 40, b: 0 }
+    };
+    
+    Plotly.newPlot('plotly-3d', [trace], layout, { responsive: true });
+}
+
+function plotPopulationHistogram(plot_data) {
+    const states = plot_data.states;
+    const n_states = plot_data.n_states;
+    
+    // Compter les populations
+    const counts = new Array(n_states).fill(0);
+    states.forEach(s => counts[s]++);
+    
+    const trace = {
+        x: counts,
+        type: 'histogram',
+        nbinsx: 30,
+        marker: { color: 'rgba(3, 102, 214, 0.7)' }
+    };
+    
+    const layout = {
+        title: 'Distribution des Populations par Cellule',
+        xaxis: { title: 'Nombre de particules' },
+        yaxis: { title: 'Nombre de cellules' },
+        height: 300,
+        margin: { l: 50, r: 20, t: 40, b: 40 }
+    };
+    
+    Plotly.newPlot('population-histogram', [trace], layout, { responsive: true });
+}
+
+// ═════════════════════════════════════════════════════════════
+// COMPARAISON DEM vs MARKOV
+// ═════════════════════════════════════════════════════════════
+
+async function loadDEMMarkovComparison() {
+    const exp_id = document.getElementById('experiment-select').value;
+    if (!exp_id) return;
+    
+    try {
+        const response = await fetch(`/api/partitioner/dem-markov-3d/?exp_id=${exp_id}`);
+        const data = await response.json();
+        
+        // Afficher DEM data
+        const dem_div = document.getElementById('dem-data');
+        if (data.dem.loaded) {
+            dem_div.innerHTML = `
+                <p><strong>Particules chargées:</strong> ${data.dem.n_particles}</p>
+                <p class="text-xs text-gray-500 mt-2">✓ Données disponibles</p>
+            `;
+        } else {
+            dem_div.innerHTML = '<p class="text-red-500">✗ Données non disponibles</p>';
+        }
+        
+        // Afficher Markov data
+        const markov_div = document.getElementById('markov-data');
+        if (data.markov.error) {
+            markov_div.innerHTML = `<p class="text-red-500">✗ Erreur: ${data.markov.error}</p>`;
+        } else {
+            markov_div.innerHTML = `
+                <p><strong>N états:</strong> ${data.markov.shape[0]}</p>
+                <p><strong>P(rester):</strong> ${data.markov.diagonal_mean.toFixed(4)}</p>
+                <p><strong>λ₂:</strong> ${data.markov.eigenvalue_2.toFixed(4)}</p>
+                <p><strong>Gap:</strong> ${data.markov.spectral_gap.toFixed(4)}</p>
+                <p class="text-xs text-gray-500 mt-2">✓ Modèle chargé</p>
+            `;
+        }
+        
+    } catch (e) {
+        console.error('Error:', e);
+    }
+}
+</script>
+{% endblock %}

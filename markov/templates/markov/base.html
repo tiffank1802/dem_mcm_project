@@ -1,0 +1,300 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="fr" class="h-full">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}DEM MCM{% endblock %} — Markov Mixing</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        glass: {
+                            50: 'rgba(255,255,255,0.05)',
+                            100: 'rgba(255,255,255,0.1)',
+                            200: 'rgba(255,255,255,0.2)',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- HTMX -->
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+
+    <!-- Alpine.js -->
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
+    <!-- Plotly -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+
+    <!-- Three.js (pour la visu 3D glass) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+    <style>
+        /* ═══════════════════════════════════════════════════════════════
+           LIQUID GLASS EFFECT (macOS-style)
+           ═══════════════════════════════════════════════════════════════ */
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Cdefs%3E%3Cpattern id='noise' x='0' y='0' width='100' height='100' patternUnits='userSpaceOnUse'%3E%3Crect width='100' height='100' fill='%23f0f9ff'/%3E%3Ccircle cx='20' cy='20' r='2' fill='%23bfdbfe' opacity='0.5'/%3E%3Ccircle cx='50' cy='30' r='1.5' fill='%23bfdbfe' opacity='0.3'/%3E%3C/pattern%3E%3C/defs%3E%3Crect width='100' height='100' fill='url(%23noise)'/%3E%3C/svg%3E") center center;
+            background-size: 500px;
+            background-attachment: fixed;
+        }
+
+        /* ─ Liquid Glass Wrapper ─ */
+        .liquidGlass-wrapper {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            overflow: hidden;
+            box-shadow: 0 6px 6px rgba(0, 0, 0, 0.15), 0 0 20px rgba(0, 0, 0, 0.08);
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 2.2);
+        }
+
+        .liquidGlass-effect {
+            position: absolute;
+            z-index: 0;
+            inset: 0;
+            backdrop-filter: blur(3px) saturate(180%);
+            filter: url(#glass-distortion);
+            overflow: hidden;
+        }
+
+        .liquidGlass-tint {
+            z-index: 1;
+            position: absolute;
+            inset: 0;
+            background: rgba(255, 255, 255, 0.50);
+        }
+
+        .liquidGlass-shine {
+            position: absolute;
+            inset: 0;
+            z-index: 2;
+            overflow: hidden;
+            box-shadow: inset 2px 2px 1px 0 rgba(255, 255, 255, 0.5),
+                        inset -1px -1px 1px 1px rgba(255, 255, 255, 0.5);
+        }
+
+        .liquidGlass-content {
+            z-index: 3;
+            position: relative;
+        }
+
+        .liquidGlass-wrapper:hover {
+            box-shadow: 0 8px 8px rgba(0, 0, 0, 0.2), 0 0 30px rgba(0, 0, 0, 0.12);
+            transform: translateY(-2px);
+        }
+
+        /* ─ Navigation Bar ─ */
+        .nav-liquid {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+            backdrop-filter: blur(10px) saturate(200%);
+            background: rgba(255, 255, 255, 0.65);
+            border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        }
+
+        .nav-liquid-content {
+            max-width: 100%;
+            margin: 0 auto;
+            padding: 1rem 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+        }
+
+        .nav-item {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.6rem 1rem;
+            border-radius: 2rem;
+            background: rgba(59, 130, 246, 0.1);
+            color: #1e40af;
+            text-decoration: none;
+            font-size: 0.875rem;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .nav-item:hover {
+            background: rgba(59, 130, 246, 0.2);
+            transform: scale(1.05);
+        }
+
+        .nav-item.active {
+            background: rgba(59, 130, 246, 0.4);
+            color: #0c2340;
+            font-weight: 600;
+        }
+
+        .nav-item svg {
+            width: 20px;
+            height: 20px;
+        }
+
+        /* ─ Main content area ─ */
+        main {
+            margin-top: 80px;
+            padding: 2rem;
+            min-height: calc(100vh - 80px);
+        }
+
+        /* ─ Glass Card ─ */
+        .glass-card {
+            background: rgba(255, 255, 255, 0.65);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 16px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+            transition: all 0.3s ease;
+        }
+
+        .glass-card:hover {
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12);
+            transform: translateY(-2px);
+        }
+
+        /* ─ Method badges ─ */
+        .method-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.4rem 0.8rem;
+            border-radius: 0.5rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .method-cartesian { background: #dbeafe; color: #1e40af; }
+        .method-cylindrical { background: #fef3c7; color: #92400e; }
+        .method-voronoi { background: #d1fae5; color: #065f46; }
+        .method-quantile { background: #fce7f3; color: #9d174d; }
+        .method-octree { background: #ede9fe; color: #5b21b6; }
+        .method-physics { background: #fed7aa; color: #9a3412; }
+
+        /* ─ Animations ─ */
+        .fade-in { animation: fadeIn 0.3s ease-in; }
+        @keyframes fadeIn { 
+            from { opacity: 0; transform: translateY(8px); } 
+            to { opacity: 1; transform: translateY(0); } 
+        }
+
+        .data-row:hover { background: rgba(59, 130, 246, 0.04); transition: background 0.2s ease; }
+
+        /* ─ Tab Content ─ */
+        .tab-content {
+            display: none;
+            animation: fadeIn 0.3s ease-in;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+    </style>
+
+
+    {% block extra_head %}{% endblock %}
+</head>
+
+<body class="h-full">
+
+    <!-- SVG Filter pour l'effet Liquid Glass -->
+    <svg style="display: none">
+        <filter id="glass-distortion" x="0%" y="0%" width="100%" height="100%" filterUnits="objectBoundingBox">
+            <feTurbulence type="fractalNoise" baseFrequency="0.01 0.01" numOctaves="1" seed="5" result="turbulence" />
+            <feComponentTransfer in="turbulence" result="mapped">
+                <feFuncR type="gamma" amplitude="1" exponent="10" offset="0.5" />
+                <feFuncG type="gamma" amplitude="0" exponent="1" offset="0" />
+                <feFuncB type="gamma" amplitude="0" exponent="1" offset="0.5" />
+            </feComponentTransfer>
+            <feGaussianBlur in="turbulence" stdDeviation="3" result="softMap" />
+            <feSpecularLighting in="softMap" surfaceScale="5" specularConstant="1" specularExponent="100" lighting-color="white" result="specLight">
+                <fePointLight x="-200" y="-200" z="300" />
+            </feSpecularLighting>
+            <feComposite in="specLight" operator="arithmetic" k1="0" k2="1" k3="1" k4="0" result="litImage" />
+            <feDisplacementMap in="SourceGraphic" in2="softMap" scale="150" xChannelSelector="R" yChannelSelector="G" />
+        </filter>
+    </svg>
+
+    <!-- ═══ NAVIGATION LIQUID GLASS ═══ -->
+    <nav class="nav-liquid">
+        <div class="nav-liquid-content">
+            <div class="flex items-center gap-2">
+                <span class="text-2xl">🔬</span>
+                <h1 class="text-lg font-bold text-gray-900">DEM MCM</h1>
+            </div>
+
+            <div class="nav-links">
+                <!-- Dashboard -->
+                <a href="{% url 'markov:dashboard' %}" 
+                        class="nav-item {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
+                    <svg viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M10.0954 18.1892C10.2251 15.9585 11.9923 14.2726 14.1987 13.9192C16.3772 13.5703 19.105 13.0602 21.2305 12.4239C23.9034 11.6238 27.5286 10.0539 29.8162 9.01576C31.2034 8.38626 32.7966 8.38626 34.1838 9.01576C36.4714 10.0539 40.0966 11.6238 42.7695 12.4239C44.895 13.0602 47.6228 13.5703 49.8013 13.9192C52.0077 14.2726 53.7749 15.9585 53.9046 18.1892C54.418 27.02 53.5497 48.9163 33.3725 55.5791C32.4916 55.87 31.5084 55.87 30.6275 55.5791C10.4503 48.9163 9.58202 27.02 10.0954 18.1892Z" fill="currentColor"></path>
+                    </svg>
+                    Dashboard
+                </a>
+
+                <!-- Analyse Unifiée -->
+                <a href="{% url 'markov:unified_analysis' %}" 
+                        class="nav-item {% if request.resolver_match.url_name == 'unified_analysis' %}active{% endif %}">
+                    <svg fill="currentColor" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 52 52">
+                        <g><path d="M44.9,2H7.1C4.3,2,2,4.3,2,7.1v37.7C2,47.7,4.3,50,7.1,50h37.7c2.8,0,5.1-2.3,5.1-5.1V7.1C50,4.3,47.7,2,44.9,2z M15.7,39.7c0,0.9-0.8,1.7-1.7,1.7h-1.7c-0.9,0-1.7-0.8-1.7-1.7v-9.4c0-0.9,0.8-1.7,1.7-1.7H14 c0.9,0,1.7,0.8,1.7,1.7V39.7z M24.3,39.7c0,0.9-0.8,1.7-1.7,1.7h-1.7c-0.9,0-1.7-0.8-1.7-1.7V17.4c0-0.9,0.8-1.7,1.7-1.7h1.7 c0.9,0,1.7,0.8,1.7,1.7V39.7z M32.9,39.7c0,0.9-0.8,1.7-1.7,1.7h-1.7c-0.9,0-1.7-0.8-1.7-1.7V12.3c0-0.9,0.8-1.7,1.7-1.7h1.7 c0.9,0,1.7,0.8,1.7,1.7V39.7z M41.4,39.7c0,0.9-0.8,1.7-1.7,1.7H38c-0.9,0-1.7-0.8-1.7-1.7V23.4c0-0.9,0.8-1.7,1.7-1.7h1.7 c0.9,0,1.7,0.8,1.7,1.7V39.7z"></path></g>
+                    </svg>
+                    Analyse
+                </a>
+
+                <!-- 3D Viewer -->
+                <a href="{% url 'markov:partitioner_3d_trame' %}" 
+                        class="nav-item {% if request.resolver_match.url_name == 'partitioner_3d_trame' or request.resolver_match.url_name == 'partition_viewer' %}active{% endif %}">
+                    <svg fill="currentColor" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm3.5-9c.83 0 1.5-.67 1.5-1.5S16.33 8 15.5 8 14 8.67 14 9.5s.67 1.5 1.5 1.5zm-7 0c.83 0 1.5-.67 1.5-1.5S9.33 8 8.5 8 7 8.67 7 9.5 7.67 11 8.5 11zm3.5 6.5c2.33 0 4.31-1.46 5.11-3.5H6.89c.8 2.04 2.78 3.5 5.11 3.5z"></path>
+                    </svg>
+                    3D
+                </a>
+
+                <!-- Admin -->
+                <a href="/admin/" class="nav-item">
+                    <svg fill="currentColor" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                        <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"></path>
+                    </svg>
+                    Admin
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- ═══ CONTENU PRINCIPAL ═══ -->
+    <main class="pt-20 px-6 pb-10 max-w-[1600px] mx-auto">
+        {% block content %}{% endblock %}
+    </main>
+
+    {% block extra_scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,108 @@
+{% extends "markov/base.html" %}
+{% block title %}Analyse Matrices{% endblock %}
+
+{% block content %}
+<div class="fade-in">
+    <h2 class="text-xl font-bold text-gray-800 mb-6">🔢 Analyse des matrices de transition</h2>
+
+    <!-- Filtre -->
+    <div class="glass-card p-4 mb-6">
+        <form method="get" class="flex gap-4 items-end">
+            <div>
+                <label class="text-xs text-gray-500 block mb-1">Méthode</label>
+                <select name="method" class="border rounded-lg px-3 py-2 text-sm bg-white">
+                    <option value="">Toutes ({{ total_count }})</option>
+                    {% for m in available_methods %}
+                    <option value="{{ m }}" {% if current_method == m %}selected{% endif %}>{{ m }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-600">
+                Filtrer
+            </button>
+        </form>
+    </div>
+
+    <!-- Graphiques -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div class="glass-card p-5">
+            <h3 class="text-sm font-semibold text-gray-700 mb-3">P(rester) vs Nombre d'états</h3>
+            <div id="chart-diag-vs-states" style="height:400px;"></div>
+        </div>
+        <div class="glass-card p-5">
+            <h3 class="text-sm font-semibold text-gray-700 mb-3">Σ lignes [min, max]</h3>
+            <div id="chart-rowsum" style="height:400px;"></div>
+        </div>
+        <div class="glass-card p-5">
+            <h3 class="text-sm font-semibold text-gray-700 mb-3">|λ₂| vs Nombre d'états</h3>
+            <div id="chart-lambda2" style="height:400px;"></div>
+        </div>
+        <div class="glass-card p-5">
+            <h3 class="text-sm font-semibold text-gray-700 mb-3">Fraction visitée vs Nombre d'états</h3>
+            <div id="chart-visited" style="height:400px;"></div>
+        </div>
+        <div class="glass-card p-5">
+            <h3 class="text-sm font-semibold text-gray-700 mb-3">P(rester) vs NLT</h3>
+            <div id="chart-diag-vs-nlt" style="height:400px;"></div>
+        </div>
+        <div class="glass-card p-5">
+            <h3 class="text-sm font-semibold text-gray-700 mb-3">σ(diagonale) vs Nombre d'états</h3>
+            <div id="chart-diag-std" style="height:400px;"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+const data = {{ matrix_data|safe }};
+const cfg = {
+    paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)',
+    font: { size: 11 }, margin: { t: 10, b: 40, l: 50, r: 10 },
+};
+const methodColors = {
+    cartesian: '#3b82f6', cylindrical: '#f59e0b', voronoi: '#10b981',
+    quantile: '#ef4444', octree: '#8b5cf6', physics: '#f97316',
+};
+const methods = [...new Set(data.map(d => d.method))];
+
+function byMethod(field_x, field_y) {
+    return methods.map(m => ({
+        x: data.filter(d => d.method === m).map(d => d[field_x]),
+        y: data.filter(d => d.method === m).map(d => d[field_y]),
+        text: data.filter(d => d.method === m).map(d => d.name),
+        mode: 'markers', name: m,
+        marker: { color: methodColors[m] || '#888', size: 8, opacity: 0.7 },
+        hovertemplate: '%{text}<br>' + field_x + '=%{x}<br>' + field_y + '=%{y:.4f}<extra></extra>',
+    }));
+}
+
+Plotly.newPlot('chart-diag-vs-states', byMethod('n_states', 'diagonal_mean'),
+    { ...cfg, xaxis: { title: 'N états', type: 'log' }, yaxis: { title: 'P(rester)' } });
+
+Plotly.newPlot('chart-rowsum', [
+    ...methods.map(m => ({
+        x: data.filter(d => d.method === m).map(d => d.n_states),
+        y: data.filter(d => d.method === m).map(d => d.row_sum_mean),
+        error_y: {
+            type: 'data', symmetric: false,
+            array: data.filter(d => d.method === m).map(d => d.row_sum_max - d.row_sum_mean),
+            arrayminus: data.filter(d => d.method === m).map(d => d.row_sum_mean - d.row_sum_min),
+        },
+        mode: 'markers', name: m,
+        marker: { color: methodColors[m] || '#888', size: 8 },
+    }))
+], { ...cfg, xaxis: { title: 'N états', type: 'log' }, yaxis: { title: 'Σ lignes' },
+     shapes: [{ type: 'line', x0: 1, x1: 100000, y0: 1, y1: 1, line: { color: 'red', dash: 'dash' } }] });
+
+Plotly.newPlot('chart-lambda2', byMethod('n_states', 'eigenvalue_2'),
+    { ...cfg, xaxis: { title: 'N états', type: 'log' }, yaxis: { title: '|λ₂|' } });
+
+Plotly.newPlot('chart-visited', byMethod('n_states', 'fraction_visited'),
+    { ...cfg, xaxis: { title: 'N états', type: 'log' }, yaxis: { title: 'Fraction visitée', range: [0, 1.05] } });
+
+Plotly.newPlot('chart-diag-vs-nlt', byMethod('nlt', 'diagonal_mean'),
+    { ...cfg, xaxis: { title: 'NLT' }, yaxis: { title: 'P(rester)' } });
+
+Plotly.newPlot('chart-diag-std', byMethod('n_states', 'diagonal_std'),
+    { ...cfg, xaxis: { title: 'N états', type: 'log' }, yaxis: { title: 'σ(diagonale)' } });
+</script>
+{% endblock %}

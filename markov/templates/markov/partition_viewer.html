@@ -1,0 +1,299 @@
+{% extends "markov/base.html" %}
+{% block title %}Visualisation 3D{% endblock %}
+
+{% block content %}
+<div class="fade-in">
+    <h2 class="text-xl font-bold text-gray-800 mb-6">🔬 Visualisation 3D des partitions</h2>
+
+    <div class="glass-card p-5 mb-6">
+        <p class="text-gray-600 text-sm mb-4">
+            Sélectionnez un fichier DEM et une méthode de partitionnement pour visualiser
+            les particules colorées par cellule.
+        </p>
+        <div class="flex flex-wrap gap-4 items-end" x-data="partitionViewer()" x-init="init()">
+            <div>
+                <label class="text-xs text-gray-500 block mb-1">Fichier DEM (index)</label>
+                <input type="number" x-model="fileIndex" value="100"
+                       class="border rounded-lg px-3 py-2 text-sm w-28 bg-white">
+            </div>
+            <div>
+                <label class="text-xs text-gray-500 block mb-1">Méthode</label>
+                <select x-model="method" class="border rounded-lg px-3 py-2 text-sm bg-white">
+                    <option value="cartesian">Cartésien</option>
+                    <option value="cylindrical">Cylindrique</option>
+                    <option value="voronoi">Voronoï</option>
+                    <option value="quantile">Quantile</option>
+                    <option value="octree">Octree</option>
+                </select>
+            </div>
+            <div>
+                <label class="text-xs text-gray-500 block mb-1">N cellules</label>
+                <input type="number" x-model="nCells" value="125"
+                       class="border rounded-lg px-3 py-2 text-sm w-28 bg-white">
+            </div>
+            <button @click="loadPartitions()"
+                    class="bg-blue-500 text-white px-6 py-2 rounded-lg text-sm font-medium hover:bg-blue-600">
+                🔧 Charger Plotly
+            </button>
+        </div>
+    </div>
+
+    <div class="glass-card p-5">
+        <div id="viewer-3d" style="height:700px; width:100%;"></div>
+    </div>
+</div>
+
+<script>
+function partitionViewer() {
+    return {
+        fileIndex: 100,
+        method: 'cartesian',
+        nCells: 125,
+        init() {
+            // Vue initiale vide
+            Plotly.newPlot('viewer-3d', [], {
+                scene: { xaxis: { title: 'X' }, yaxis: { title: 'Y' }, zaxis: { title: 'Z' },
+                         aspectmode: 'data', bgcolor: 'rgb(250,250,252)' },
+                paper_bgcolor: 'rgba(0,0,0,0)',
+                height: 700,
+                margin: { t: 30, b: 0, l: 0, r: 0 },
+            });
+        },
+        async loadPartitions() {
+            const url = `/api/partitions/?file_index=${this.fileIndex}&method=${this.method}&n_cells=${this.nCells}`;
+            try {
+                const resp = await fetch(url);
+                const data = await resp.json();
+                if (data.error) { alert(data.error); return; }
+
+                // Trace unique avec colormap
+                const traces = [{
+                    x: data.x,
+                    y: data.y,
+                    z: data.z,
+                    mode: 'markers',
+                    type: 'scatter3d',
+                    marker: {
+                        size: 4,
+                        color: data.states,
+                        colorscale: 'Viridis',
+                        cmin: 0,
+                        cmax: Math.max(data.n_cells - 1, 1),
+                        opacity: 0.85,
+                        colorbar: {
+                            title: 'Cellule',
+                            thickness: 20,
+                            len: 0.6,
+                        }
+                    },
+                    hovertemplate: 'Cellule: %{marker.color:.0f}<br>x=%{x:.3f}<br>y=%{y:.3f}<br>z=%{z:.3f}<extra></extra>',
+                }];
+
+                 // Ajouter les frontières
+                 if (data.boundaries && data.boundaries.length > 0) {
+                     const xmin = Math.min(...data.x);
+                     const xmax = Math.max(...data.x);
+                     const ymin = Math.min(...data.y);
+                     const ymax = Math.max(...data.y);
+                     const zmin = Math.min(...data.z);
+                     const zmax = Math.max(...data.z);
+
+                     data.boundaries.forEach(b => {
+                         if (b.type === 'x_plane') {
+                             // X-plane boundary: vertical slice at x = b.value
+                             const gridPoints = 15;
+                             const yGrid = [], zGrid = [], xGrid = [];
+                             for (let i = 0; i < gridPoints; i++) {
+                                 for (let j = 0; j < gridPoints; j++) {
+                                     yGrid.push(ymin + (ymax - ymin) * i / (gridPoints - 1));
+                                     zGrid.push(zmin + (zmax - zmin) * j / (gridPoints - 1));
+                                     xGrid.push(b.value);
+                                 }
+                             }
+                             traces.push({
+                                 x: xGrid, y: yGrid, z: zGrid,
+                                 mode: 'markers',
+                                 type: 'scatter3d',
+                                 marker: { size: 1, color: 'rgba(255, 0, 0, 0.1)' },
+                                 showlegend: false,
+                                 hoverinfo: 'skip'
+                             });
+                         } else if (b.type === 'y_plane') {
+                             // Y-plane boundary
+                             const gridPoints = 15;
+                             const xGrid = [], zGrid = [], yGrid = [];
+                             for (let i = 0; i < gridPoints; i++) {
+                                 for (let j = 0; j < gridPoints; j++) {
+                                     xGrid.push(xmin + (xmax - xmin) * i / (gridPoints - 1));
+                                     zGrid.push(zmin + (zmax - zmin) * j / (gridPoints - 1));
+                                     yGrid.push(b.value);
+                                 }
+                             }
+                             traces.push({
+                                 x: xGrid, y: yGrid, z: zGrid,
+                                 mode: 'markers',
+                                 type: 'scatter3d',
+                                 marker: { size: 1, color: 'rgba(0, 255, 0, 0.1)' },
+                                 showlegend: false,
+                                 hoverinfo: 'skip'
+                             });
+                         } else if (b.type === 'z_plane') {
+                             // Z-plane boundary
+                             const gridPoints = 15;
+                             const xGrid = [], yGrid = [], zGrid = [];
+                             for (let i = 0; i < gridPoints; i++) {
+                                 for (let j = 0; j < gridPoints; j++) {
+                                     xGrid.push(xmin + (xmax - xmin) * i / (gridPoints - 1));
+                                     yGrid.push(ymin + (ymax - ymin) * j / (gridPoints - 1));
+                                     zGrid.push(b.value);
+                                 }
+                             }
+                             traces.push({
+                                 x: xGrid, y: yGrid, z: zGrid,
+                                 mode: 'markers',
+                                 type: 'scatter3d',
+                                 marker: { size: 1, color: 'rgba(0, 0, 255, 0.1)' },
+                                 showlegend: false,
+                                 hoverinfo: 'skip'
+                             });
+                         } else if (b.type === 'cylinder') {
+                             // Cylindrical boundary: concentric circles
+                             const steps = 50;
+                             const xCircle = [], yCircle = [], zCircle = [];
+                             for (let layer = 0; layer < 3; layer++) {
+                                 const z_val = b.z_min + (b.z_max - b.z_min) * layer / 2;
+                                 for (let i = 0; i < steps; i++) {
+                                     const theta = (i / steps) * 2 * Math.PI;
+                                     xCircle.push(b.center_x + b.radius * Math.cos(theta));
+                                     yCircle.push(b.center_y + b.radius * Math.sin(theta));
+                                     zCircle.push(z_val);
+                                 }
+                             }
+                             traces.push({
+                                 x: xCircle, y: yCircle, z: zCircle,
+                                 mode: 'markers',
+                                 type: 'scatter3d',
+                                 marker: { size: 1, color: 'rgba(255, 100, 0, 0.3)' },
+                                 showlegend: false,
+                                 hoverinfo: 'skip'
+                             });
+                         } else if (b.type === 'meridian') {
+                             // Meridian plane (radial slice through center)
+                             const radialSteps = 20;
+                             const zSteps = 15;
+                             const xMer = [], yMer = [], zMer = [];
+                             for (let i = 0; i <= radialSteps; i++) {
+                                 const r = (i / radialSteps) * b.r_max;
+                                 for (let j = 0; j <= zSteps; j++) {
+                                     const z_val = zmin + (zmax - zmin) * j / zSteps;
+                                     xMer.push(b.center_x + r * Math.cos(b.theta));
+                                     yMer.push(b.center_y + r * Math.sin(b.theta));
+                                     zMer.push(z_val);
+                                 }
+                             }
+                             traces.push({
+                                 x: xMer, y: yMer, z: zMer,
+                                 mode: 'markers',
+                                 type: 'scatter3d',
+                                 marker: { size: 1, color: 'rgba(255, 0, 255, 0.2)' },
+                                 showlegend: false,
+                                 hoverinfo: 'skip'
+                             });
+                         } else if (b.type === 'centroid') {
+                             // Voronoi centroid as sphere
+                             traces.push({
+                                 x: [b.x], y: [b.y], z: [b.z],
+                                 mode: 'markers',
+                                 type: 'scatter3d',
+                                 marker: { size: 4, color: 'rgba(255, 255, 0, 0.8)' },
+                                 showlegend: false,
+                                 hovertemplate: `Cell ${b.cell_id}<br>x=${b.x.toFixed(3)}<br>y=${b.y.toFixed(3)}<br>z=${b.z.toFixed(3)}<extra></extra>`
+                             });
+                         } else if (b.type === 'octree_box') {
+                             // Octree box edges
+                             const boxX = [
+                                 [b.xmin, b.xmax, b.xmax, b.xmin, b.xmin],
+                                 [b.xmin, b.xmax, b.xmax, b.xmin, b.xmin],
+                                 [b.xmin, b.xmin, b.xmin, b.xmin, b.xmin],
+                                 [b.xmax, b.xmax, b.xmax, b.xmax, b.xmax]
+                             ];
+                             const boxY = [
+                                 [b.ymin, b.ymin, b.ymax, b.ymax, b.ymin],
+                                 [b.ymin, b.ymin, b.ymax, b.ymax, b.ymin],
+                                 [b.ymin, b.ymax, b.ymax, b.ymin, b.ymin],
+                                 [b.ymin, b.ymax, b.ymax, b.ymin, b.ymin]
+                             ];
+                             const boxZ = [
+                                 [b.zmin, b.zmin, b.zmin, b.zmin, b.zmin],
+                                 [b.zmax, b.zmax, b.zmax, b.zmax, b.zmax],
+                                 [b.zmin, b.zmin, b.zmax, b.zmax, b.zmin],
+                                 [b.zmin, b.zmin, b.zmax, b.zmax, b.zmin]
+                             ];
+                             
+                             // Draw box edges as separate line traces
+                             const edgeConfigs = [
+                                 [[b.xmin, b.xmax, b.xmax, b.xmin, b.xmin], 
+                                  [b.ymin, b.ymin, b.ymax, b.ymax, b.ymin], 
+                                  [b.zmin, b.zmin, b.zmin, b.zmin, b.zmin]],
+                                 [[b.xmin, b.xmax, b.xmax, b.xmin, b.xmin], 
+                                  [b.ymin, b.ymin, b.ymax, b.ymax, b.ymin], 
+                                  [b.zmax, b.zmax, b.zmax, b.zmax, b.zmax]],
+                                 [[b.xmin, b.xmin, b.xmin, b.xmin, b.xmin], 
+                                  [b.ymin, b.ymax, b.ymax, b.ymin, b.ymin], 
+                                  [b.zmin, b.zmin, b.zmax, b.zmax, b.zmin]],
+                                 [[b.xmax, b.xmax, b.xmax, b.xmax, b.xmax], 
+                                  [b.ymin, b.ymax, b.ymax, b.ymin, b.ymin], 
+                                  [b.zmin, b.zmin, b.zmax, b.zmax, b.zmin]]
+                             ];
+                             edgeConfigs.forEach((edge) => {
+                                 traces.push({
+                                     x: edge[0], y: edge[1], z: edge[2],
+                                     mode: 'lines',
+                                     type: 'scatter3d',
+                                     line: { color: 'rgba(100, 200, 255, 0.6)', width: 2 },
+                                     showlegend: false,
+                                     hoverinfo: 'skip'
+                                 });
+                             });
+                         }
+                     });
+                 }
+
+                Plotly.react('viewer-3d', traces, {
+                    scene: { 
+                        xaxis: { title: 'X' }, 
+                        yaxis: { title: 'Y' }, 
+                        zaxis: { title: 'Z' },
+                        aspectmode: 'data', 
+                        bgcolor: 'rgb(250,250,252)',
+                        camera: { eye: { x: 1.8, y: 1.8, z: 1.2 } } 
+                    },
+                    title: `${this.method} — ${data.n_cells} cellules — t=${this.fileIndex}`,
+                    paper_bgcolor: 'rgba(0,0,0,0)',
+                    height: 700,
+                    margin: { t: 40, b: 0, l: 0, r: 0 },
+                });
+            } catch (e) {
+                alert('Erreur: ' + e.message);
+            }
+        },
+
+        async loadPartitionsPyVista() {
+            const url = `/api/partitions-pyvista/?file_index=${this.fileIndex}&method=${this.method}&n_cells=${this.nCells}&sample_every=1`;
+            try {
+                const resp = await fetch(url);
+                const payload = await resp.json();
+                if (payload.error) {
+                    alert('Erreur PyVista: ' + payload.error);
+                    return;
+                }
+                const container = document.getElementById('pyvista-render');
+                container.innerHTML = `<img src="${payload.image}" style="width:100%; max-height:700px; object-fit:contain;" />`;
+            } catch (e) {
+                alert('Erreur PyVista: ' + e.message);
+            }
+        }
+    };
+}
+</script>
+{% endblock %}

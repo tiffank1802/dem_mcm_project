@@ -1,0 +1,140 @@
+{% extends "markov/base.html" %}
+{% block title %}Expériences{% endblock %}
+
+{% block content %}
+<div class="fade-in">
+    <div class="flex items-center justify-between mb-6">
+        <h2 class="text-xl font-bold text-gray-800">🗂️ Expériences ({{ total_count }})</h2>
+    </div>
+
+    <!-- ═══ FILTRES ═══ -->
+    <div class="glass-card p-4 mb-6">
+        <form method="get" class="flex flex-wrap gap-4 items-end">
+            <div>
+                <label class="text-xs text-gray-500 block mb-1">Méthode</label>
+                <select name="method" class="border rounded-lg px-3 py-2 text-sm bg-white">
+                    <option value="">Toutes</option>
+                    {% for m in available_methods %}
+                    <option value="{{ m }}" {% if current_filters.method == m %}selected{% endif %}>
+                        {{ m }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="text-xs text-gray-500 block mb-1">NLT min</label>
+                <input type="number" name="nlt_min" value="{{ current_filters.nlt_min|default:'' }}"
+                       class="border rounded-lg px-3 py-2 text-sm w-24 bg-white" placeholder="10">
+            </div>
+            <div>
+                <label class="text-xs text-gray-500 block mb-1">NLT max</label>
+                <input type="number" name="nlt_max" value="{{ current_filters.nlt_max|default:'' }}"
+                       class="border rounded-lg px-3 py-2 text-sm w-24 bg-white" placeholder="500">
+            </div>
+            <div>
+                <label class="text-xs text-gray-500 block mb-1">Step</label>
+                <select name="step" class="border rounded-lg px-3 py-2 text-sm bg-white">
+                    <option value="">Tous</option>
+                    {% for s in available_steps %}
+                    <option value="{{ s }}" {% if current_filters.step == s|stringformat:"d" %}selected{% endif %}>
+                        {{ s }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="text-xs text-gray-500 block mb-1">N cells min</label>
+                <input type="number" name="n_cells_min" value="{{ current_filters.n_cells_min|default:'' }}"
+                       class="border rounded-lg px-3 py-2 text-sm w-24 bg-white">
+            </div>
+            <div>
+                <label class="text-xs text-gray-500 block mb-1">N cells max</label>
+                <input type="number" name="n_cells_max" value="{{ current_filters.n_cells_max|default:'' }}"
+                       class="border rounded-lg px-3 py-2 text-sm w-24 bg-white">
+            </div>
+            <div>
+                <label class="text-xs text-gray-500 block mb-1">Trier par</label>
+                <select name="sort" class="border rounded-lg px-3 py-2 text-sm bg-white">
+                    <option value="-created_at" {% if current_filters.sort == '-created_at' %}selected{% endif %}>Date ↓</option>
+                    <option value="nlt" {% if current_filters.sort == 'nlt' %}selected{% endif %}>NLT ↑</option>
+                    <option value="-nlt" {% if current_filters.sort == '-nlt' %}selected{% endif %}>NLT ↓</option>
+                    <option value="n_states" {% if current_filters.sort == 'n_states' %}selected{% endif %}>États ↑</option>
+                    <option value="-n_states" {% if current_filters.sort == '-n_states' %}selected{% endif %}>États ↓</option>
+                </select>
+            </div>
+            <button type="submit"
+                    class="bg-blue-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-600 transition">
+                🔍 Filtrer
+            </button>
+            <a href="{% url 'markov:experiment_list' %}"
+               class="text-sm text-gray-500 hover:text-red-500 px-3 py-2">
+                ✕ Reset
+            </a>
+        </form>
+    </div>
+
+    <!-- ═══ TABLEAU ═══ -->
+    <div class="glass-card overflow-hidden">
+        <table class="w-full text-sm">
+            <thead>
+                <tr class="border-b border-gray-100 text-xs text-gray-400 uppercase">
+                    <th class="px-4 py-3 text-left">Expérience</th>
+                    <th class="px-4 py-3 text-left">Méthode</th>
+                    <th class="px-4 py-3 text-right">États</th>
+                    <th class="px-4 py-3 text-right">Visités</th>
+                    <th class="px-4 py-3 text-right">NLT</th>
+                    <th class="px-4 py-3 text-right">Step</th>
+                    <th class="px-4 py-3 text-right">Start</th>
+                    <th class="px-4 py-3 text-right">P(rester)</th>
+                    <th class="px-4 py-3 text-right">Σ lignes</th>
+                    <th class="px-4 py-3 text-right">|λ₂|</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for exp in experiments %}
+                <tr class="data-row border-b border-gray-50 cursor-pointer hover:bg-blue-50/30 transition"
+                    onclick="window.location='{% url 'markov:experiment_detail' exp.pk %}'">
+                    <td class="px-4 py-3 font-medium text-gray-700 text-xs">
+                        {{ exp.folder_name|truncatechars:45 }}
+                    </td>
+                    <td class="px-4 py-3">
+                        <span class="px-2 py-0.5 rounded-full text-xs font-bold method-{{ exp.partition_method.name }}">
+                            {{ exp.partition_method.name }}
+                        </span>
+                    </td>
+                    <td class="px-4 py-3 text-right text-gray-600 font-mono">{{ exp.n_states }}</td>
+                    <td class="px-4 py-3 text-right text-gray-600 font-mono">
+                        {% if exp.matrix %}{{ exp.matrix.n_states_visited }}{% else %}—{% endif %}
+                    </td>
+                    <td class="px-4 py-3 text-right text-gray-600 font-mono">{{ exp.nlt }}</td>
+                    <td class="px-4 py-3 text-right text-gray-600 font-mono">{{ exp.step_size }}</td>
+                    <td class="px-4 py-3 text-right text-gray-600 font-mono">{{ exp.start_index }}</td>
+                    <td class="px-4 py-3 text-right font-mono font-bold
+                        {% if exp.matrix.diagonal_mean > 0.5 %}text-green-600
+                        {% elif exp.matrix.diagonal_mean > 0.1 %}text-yellow-600
+                        {% else %}text-red-600{% endif %}">
+                        {% if exp.matrix %}{{ exp.matrix.diagonal_mean|floatformat:4 }}{% else %}—{% endif %}
+                    </td>
+                    <td class="px-4 py-3 text-right font-mono text-xs text-gray-500">
+                        {% if exp.matrix %}
+                            [{{ exp.matrix.row_sum_min|floatformat:3 }}, {{ exp.matrix.row_sum_max|floatformat:3 }}]
+                        {% else %}—{% endif %}
+                    </td>
+                    <td class="px-4 py-3 text-right font-mono text-xs">
+                        {% if exp.matrix.eigenvalue_2 %}
+                            {{ exp.matrix.eigenvalue_2|floatformat:4 }}
+                        {% else %}—{% endif %}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="10" class="px-4 py-8 text-center text-gray-400">
+                        Aucune expérience trouvée
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
