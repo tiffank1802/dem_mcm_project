@@ -2711,8 +2711,9 @@ def api_analysis_data(request):
                     d["mixing_time_90"] = rsd_result["mixing_time_90"]
                     
                     # Calculate actual time for Markov RSD based on step_size
-                    # step_size multiplies the DEM timestep (0.01s)
-                    markov_dt = 0.01 * (d["step_size"] * 100)  # Markov step in seconds
+                    # Each Markov step represents step_size DEM timesteps
+                    # DEM timestep = 0.01s, so Markov step = step_size * 0.01s
+                    markov_dt = d["step_size"] * 0.01  # seconds per Markov step
                     d["rsd_markov_times"] = [i * markov_dt for i in range(len(d["rsd_markov"]))]
                 except Exception as e:
                     logger.warning(f"RSD computation failed for {exp.folder_name}: {e}")
@@ -2818,10 +2819,11 @@ def api_rsd_comparison(request):
         start = exp.start_index or 0
         step_size = exp.step_size or 1
 
-        # Time: DEM step = 0.01s, Markov step = 0.01 * step_size (s)
-        # 60s total -> DEM: 6000 steps, Markov: 6000 / step_size steps
+        # Time: DEM step = 0.01s, Markov step = step_size * 0.01s
+        # Each Markov step represents step_size DEM timesteps
+        # 60s total -> DEM: 6000 steps, Markov: ceil(60 / (step_size*0.01)) steps
         dem_dt = .01
-        markov_dt = dem_dt * step_size*100
+        markov_dt = step_size * dem_dt  # Each Markov step = step_size * 0.01s
         total_time = 60.0
         n_dem_steps = int(total_time / dem_dt)
         n_markov_steps = int(total_time / markov_dt)
