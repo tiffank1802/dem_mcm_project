@@ -460,18 +460,19 @@ function renderRSDChart(exps, vp) {
     if (!container) return;
     if (typeof Plotly === 'undefined') { container.innerHTML = '<p>Plotly not loaded</p>'; return; }
 
-    var dt = 0.01; // secondes par pas
-
     // Show Markov RSD immediately
     var traces = [];
     var hasMarkov = false;
     for (var i = 0; i < exps.length; i++) {
         var e = exps[i];
         var rsd = e.rsd_markov || [];
+        var times = e.rsd_markov_times || [];
         if (rsd.length < 2) continue;
         hasMarkov = true;
-        var times = [];
-        for (var s = 0; s < rsd.length; s++) times.push(s * dt);
+        // Use actual time values if available, otherwise fall back to uniform spacing
+        if (times.length === 0) {
+            for (var s = 0; s < rsd.length; s++) times.push(s * 0.01);
+        }
         var label = makeLabel(e, vp) + ' (Markov)';
         traces.push({ x: times, y: rsd, mode: 'lines', name: label, line: { width: 2.5 } });
     }
@@ -496,7 +497,6 @@ function renderRSDChart(exps, vp) {
 
 function loadDEMRSD(exps, vp, container) {
     var colors = ['#ef4444', '#f97316', '#eab308', '#84cc16', '#22c55e', '#14b8a6', '#06b6d4', '#3b82f6'];
-    var dt = 0.01;
     var completed = 0;
 
     for (var i = 0; i < exps.length; i++) {
@@ -508,7 +508,8 @@ function loadDEMRSD(exps, vp, container) {
                     if (!data.success || !data.rsd_dem || data.rsd_dem.length < 2) return;
                     var demTimes = [], demVals = [];
                     for (var j = 0; j < data.rsd_dem.length; j++) {
-                        demTimes.push(data.rsd_dem[j].t * dt);
+                        // API now returns actual time in seconds, not step index
+                        demTimes.push(data.rsd_dem[j].t);
                         demVals.push(data.rsd_dem[j].rsd);
                     }
                     var label = makeLabel(exp, vp) + ' (DEM)';

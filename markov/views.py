@@ -2690,6 +2690,7 @@ def api_analysis_data(request):
 
             # Compute RSD and entropy from matrix
             d["rsd_markov"] = []
+            d["rsd_markov_times"] = []
             d["entropy_history"] = []
             d["rsd_initial"] = 0
             d["rsd_final"] = 0
@@ -2708,6 +2709,11 @@ def api_analysis_data(request):
                     d["rsd_final"] = rsd_result["rsd_final"]
                     d["mixing_time_50"] = rsd_result["mixing_time_50"]
                     d["mixing_time_90"] = rsd_result["mixing_time_90"]
+                    
+                    # Calculate actual time for Markov RSD based on step_size
+                    # step_size multiplies the DEM timestep (0.01s)
+                    markov_dt = 0.01 * (d["step_size"] * 100)  # Markov step in seconds
+                    d["rsd_markov_times"] = [i * markov_dt for i in range(len(d["rsd_markov"]))]
                 except Exception as e:
                     logger.warning(f"RSD computation failed for {exp.folder_name}: {e}")
 
@@ -2858,8 +2864,11 @@ def api_rsd_comparison(request):
                     mr = _compute_rsd_from_matrix(P, n_steps=n_markov_steps, initial_state=initial_state)
                     rsd_markov = mr["rsd_percent"]
                     rsd_markov_entropy = mr["entropy"]
+                    # Create time array for Markov RSD (actual time in seconds)
+                    markov_times = [i * markov_dt for i in range(len(rsd_markov))]
                 except Exception as e:
                     logger.warning(f"Markov RSD failed: {e}")
+                    markov_times = []
 
             # --- DEM RSD from snapshots at each timestep ---
             for t in range(0, n_dem_steps, dem_sample_every):
@@ -2881,7 +2890,7 @@ def api_rsd_comparison(request):
                         rsd_val = float(visited.std() / visited.mean() * 100)
                     else:
                         rsd_val = 0.0
-                    rsd_dem.append({"t": t, "rsd": rsd_val})
+                    rsd_dem.append({"t": t * dem_dt, "rsd": rsd_val})
                 except Exception:
                     continue
         except Exception as e:
