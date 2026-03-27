@@ -23,6 +23,8 @@ INSTALLED_APPS = [
     # Local
     "markov",
     "glass_app",
+    'core',
+    'trame_app',
 ]
 
 MIDDLEWARE = [

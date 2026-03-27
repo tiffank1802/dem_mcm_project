@@ -1,0 +1,27 @@
+# Django
+Django>=4.2
+django-filter
+whitenoise
+
+# Trame
+trame>=3.0
+trame-vtk>=2.0
+trame-vuetify>=2.0
+trame-matplotlib>=2.0
+
+# VTK
+vtk>=9.2
+
+# Calcul
+numpy<2
+torch>=2.0
+scipy
+scikit-learn
+polars
+
+# HuggingFace
+huggingface_hub
+
+# Serveur async
+aiohttp
+websockets>=10.0
