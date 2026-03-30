@@ -14,44 +14,111 @@
             <div class="glass-card p-6 sticky top-6">
                 <h2 class="text-lg font-bold text-gray-800 mb-4">⚙️ Paramètres</h2>
 
-                <!-- 1. Choisir la méthode -->
+                <!-- Mode de visualisation -->
                 <div class="mb-6">
-                    <label class="text-sm font-semibold text-gray-700 block mb-2">1. Méthode</label>
-                    <select id="method-select" class="w-full px-4 py-2 border border-gray-300 rounded-lg bg-white" onchange="onMethodChange()">
-                        <option value="cartesian">Cartésien</option>
-                        <option value="cylindrical">Cylindrique</option>
-                        <option value="voronoi">Voronoï</option>
-                        <option value="quantile">Quantile</option>
-                        <option value="octree">Octree</option>
-                        <option value="physics">Physics-Aware</option>
+                    <label class="text-sm font-semibold text-gray-700 block mb-2">Mode</label>
+                    <select id="viz-mode-select" class="w-full px-4 py-2 border border-gray-300 rounded-lg bg-white" onchange="onVizModeChange()">
+                        <option value="experiments">Expériences</option>
+                        <option value="dem_particles">Particules DEM</option>
                     </select>
                 </div>
 
-                <!-- 2. Choisir l'expérience -->
-                <div class="mb-6">
-                    <label class="text-sm font-semibold text-gray-700 block mb-2">2. Expérience</label>
-                    <select id="exp-select" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white" onchange="onExpChange()">
-                        <option value="">-- Choisir une expérience --</option>
-                    </select>
-                    <p id="exp-count" class="text-xs text-gray-500 mt-1"></p>
+                <!-- Mode Expériences (existant) -->
+                <div id="experiments-mode">
+                    <!-- 1. Choisir la méthode -->
+                    <div class="mb-6">
+                        <label class="text-sm font-semibold text-gray-700 block mb-2">1. Méthode</label>
+                        <select id="method-select" class="w-full px-4 py-2 border border-gray-300 rounded-lg bg-white" onchange="onMethodChange()">
+                            <option value="cartesian">Cartésien</option>
+                            <option value="cylindrical">Cylindrique</option>
+                            <option value="voronoi">Voronoï</option>
+                            <option value="quantile">Quantile</option>
+                            <option value="octree">Octree</option>
+                            <option value="physics">Physics-Aware</option>
+                        </select>
+                    </div>
+
+                    <!-- 2. Choisir l'expérience -->
+                    <div class="mb-6">
+                        <label class="text-sm font-semibold text-gray-700 block mb-2">2. Expérience</label>
+                        <select id="exp-select" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white" onchange="onExpChange()">
+                            <option value="">-- Choisir une expérience --</option>
+                        </select>
+                        <p id="exp-count" class="text-xs text-gray-500 mt-1"></p>
+                    </div>
+
+                    <!-- Description méthode -->
+                    <div id="method-description" class="p-3 bg-blue-50 rounded-lg border border-blue-200 mb-6 text-xs text-gray-700"></div>
+
+                    <!-- Mode radial (cylindrique uniquement) -->
+                    <div id="radial-mode-container" class="mb-6 hidden">
+                        <label class="text-sm font-semibold text-gray-700 block mb-2">Mode radial</label>
+                        <select id="radial-mode-select" class="w-full px-4 py-2 border border-gray-300 rounded-lg bg-white" onchange="onRadialModeChange()">
+                            <option value="equal_dr">Équirayon (equal_dr)</option>
+                            <option value="equal_area">Équisurface (equal_area)</option>
+                        </select>
+                        <p class="text-xs text-gray-500 mt-1">Équirayon: Δr constant | Équisurface: surfaces égales</p>
+                    </div>
+
+                    <!-- Paramètres affichés (lecture seule) -->
+                    <div id="params-display" class="mb-6 hidden">
+                        <label class="text-sm font-semibold text-gray-700 block mb-2">Paramètres</label>
+                        <div id="params-content" class="p-3 bg-gray-50 rounded-lg border text-xs space-y-1"></div>
+                    </div>
+
+                    <!-- Stats -->
+                    <div id="stats-container" class="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200 hidden">
+                        <h3 class="text-sm font-semibold text-gray-700 mb-3">📊 Statistiques</h3>
+                        <div id="stats-content" class="space-y-2 text-xs"></div>
+                    </div>
+
+                    <!-- Bouton pour afficher les particules -->
+                    <div id="particles-overlay-controls" class="mt-4 p-4 bg-green-50 rounded-lg border border-green-200 hidden">
+                        <h3 class="text-sm font-semibold text-gray-700 mb-3">🎯 Particules DEM</h3>
+                        <div class="mb-3">
+                            <label class="text-xs text-gray-500 block mb-1">Index DEM (auto: start de l'exp.)</label>
+                            <input type="number" id="exp-dem-file-index" value="100" min="0" max="5000"
+                                   class="w-full px-3 py-1 border border-gray-300 rounded-lg bg-white text-sm">
+                        </div>
+                        <div class="flex gap-2">
+                            <button onclick="addParticlesToPartitionedMixer()" class="flex-1 bg-green-600 text-white px-3 py-2 rounded-lg text-xs font-medium hover:bg-green-700">
+                                🎯 Afficher Particules
+                            </button>
+                            <button onclick="removeParticlesFromScene()" class="bg-red-500 text-white px-3 py-2 rounded-lg text-xs font-medium hover:bg-red-600">
+                                ✕
+                            </button>
+                        </div>
+                        <p id="particles-overlay-info" class="text-xs text-gray-500 mt-2 hidden"></p>
+                    </div>
                 </div>
 
-                <!-- Description méthode -->
-                <div id="method-description" class="p-3 bg-blue-50 rounded-lg border border-blue-200 mb-6 text-xs text-gray-700"></div>
-
-                <!-- Paramètres affichés (lecture seule) -->
-                <div id="params-display" class="mb-6 hidden">
-                    <label class="text-sm font-semibold text-gray-700 block mb-2">Paramètres</label>
-                    <div id="params-content" class="p-3 bg-gray-50 rounded-lg border text-xs space-y-1"></div>
+                <!-- Mode Particules DEM (nouveau) -->
+                <div id="dem-particles-mode" class="hidden">
+                    <div class="mb-6">
+                        <label class="text-sm font-semibold text-gray-700 block mb-2">Index DEM</label>
+                        <input type="number" id="dem-file-index" value="100" min="0" max="5000"
+                               class="w-full px-4 py-2 border border-gray-300 rounded-lg bg-white text-sm">
+                    </div>
+                    <div class="mb-6">
+                        <label class="text-sm font-semibold text-gray-700 block mb-2">Coloration</label>
+                        <select id="dem-color-select" class="w-full px-4 py-2 border border-gray-300 rounded-lg bg-white text-sm">
+                            <option value="none">Aucune</option>
+                            <option value="z_median">Espèce (médiane Z)</option>
+                            <option value="r_median">Espèce (médiane radius)</option>
+                            <option value="quadrant">Espèce (quadrant)</option>
+                            <option value="velocity">Vitesse (magnitude)</option>
+                        </select>
+                    </div>
+                    <button onclick="loadDemParticlesVtk()" class="w-full bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 mb-4">
+                        🎯 Charger Particules
+                    </button>
+                    <div id="dem-stats" class="p-3 bg-gray-50 rounded-lg border text-xs hidden">
+                        <p><span class="font-semibold">Particules:</span> <span id="dem-particle-count">0</span></p>
+                        <p><span class="font-semibold">Timestep:</span> <span id="dem-timestep">-</span></p>
+                    </div>
                 </div>
 
-                <!-- Stats -->
-                <div id="stats-container" class="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200 hidden">
-                    <h3 class="text-sm font-semibold text-gray-700 mb-3">📊 Statistiques</h3>
-                    <div id="stats-content" class="space-y-2 text-xs"></div>
-                </div>
-
-                <!-- Contrôles rendu -->
+                <!-- Contrôles rendu (commun aux deux modes) -->
                 <div id="render-controls" class="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200 hidden">
                     <h3 class="text-sm font-semibold text-gray-700 mb-3">🎨 Rendu</h3>
                     <div class="space-y-2 text-xs">
@@ -66,6 +133,10 @@
                         <div class="flex items-center gap-2">
                             <input type="checkbox" id="show-bbox" checked onchange="toggleLayer('bbox')">
                             <label for="show-bbox">Boîte englobante</label>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <input type="checkbox" id="show-particles" checked onchange="toggleLayer('particles')">
+                            <label for="show-particles">Particules</label>
                         </div>
                     </div>
                 </div>
@@ -115,11 +186,13 @@
 // ÉTAT
 // ═════════════════════════════════════════════════════════════
 let currentMethod = 'cartesian';
+let currentVizMode = 'experiments';
 let partitionerSchemas = {};
 let vtkOpenGLRenderWindow = null;
 let vtkRenderWindow = null;
 let meshActors = [];
 let bboxActor = null;
+let particleActors = [];
 let isWireframe = false;
 
 // ═════════════════════════════════════════════════════════════
@@ -156,6 +229,25 @@ function initVtkJS() {
 // ═════════════════════════════════════════════════════════════
 // CRÉATION D'ACTEURS VTK
 // ═════════════════════════════════════════════════════════════
+function _build_vtk_box(xmin, xmax, ymin, ymax, zmin, zmax) {
+    // Retourne [vertices, faces] pour une boîte 3D
+    const vertices = [
+        [xmin, ymin, zmin], [xmax, ymin, zmin],
+        [xmax, ymax, zmin], [xmin, ymax, zmin],
+        [xmin, ymin, zmax], [xmax, ymin, zmax],
+        [xmax, ymax, zmax], [xmin, ymax, zmax],
+    ];
+    const faces = [
+        [0, 1, 2, 3], // bottom
+        [4, 5, 6, 7], // top
+        [0, 1, 5, 4], // front
+        [2, 3, 7, 6], // back
+        [0, 3, 7, 4], // left
+        [1, 2, 6, 5], // right
+    ];
+    return [vertices, faces];
+}
+
 function buildPolyData(vertices, faces) {
     const nVerts = vertices.length;
     const pointData = new Float32Array(nVerts * 3);
@@ -243,6 +335,14 @@ async function onMethodChange() {
             `<strong>${schema.label}</strong><br>${schema.description}`;
     }
 
+    // Afficher/masquer le contrôle mode radial (uniquement pour cylindrique)
+    const radialContainer = document.getElementById('radial-mode-container');
+    if (currentMethod === 'cylindrical') {
+        radialContainer.classList.remove('hidden');
+    } else {
+        radialContainer.classList.add('hidden');
+    }
+
     // Filter experiments for this method
     await loadExperimentsForMethod(currentMethod);
 }
@@ -298,6 +398,11 @@ async function onExpChange() {
     try {
         const params = new URLSearchParams();
         params.append('exp_id', expId);
+        
+        // Ajouter le mode radial pour les expériences cylindriques
+        if (currentMethod === 'cylindrical') {
+            params.append('radial_mode', document.getElementById('radial-mode-select').value);
+        }
 
         const resp = await fetch(`/api/partitioner/trame-data/?${params}`);
         const data = await resp.json();
@@ -319,14 +424,33 @@ async function onExpChange() {
         // Rendu 3D
         renderScene(data.mesh_groups);
 
+        // Stocker l'index de départ pour les particules
+        if (data.start_index !== undefined) {
+            document.getElementById('exp-dem-file-index').value = data.start_index;
+        }
+
         // Montrer les contrôles
         document.getElementById('render-controls').classList.remove('hidden');
+        
+        // Montrer les contrôles de particules
+        document.getElementById('particles-overlay-controls').classList.remove('hidden');
 
     } catch (e) {
         console.error(e);
         alert('Erreur: ' + e.message);
     } finally {
         loading.style.display = 'none';
+    }
+}
+
+// ═════════════════════════════════════════════════════════════
+// CHANGEMENT MODE RADIAL
+// ═════════════════════════════════════════════════════════════
+async function onRadialModeChange() {
+    // Recharger la visualisation avec le nouveau mode radial
+    const select = document.getElementById('exp-select');
+    if (select.value) {
+        await onExpChange();
     }
 }
 
@@ -396,6 +520,11 @@ function toggleLayer(layer) {
     } else if (layer === 'bbox' && bboxActor) {
         if (document.getElementById('show-bbox').checked) renderer.addActor(bboxActor);
         else renderer.removeActor(bboxActor);
+    } else if (layer === 'particles') {
+        const show = document.getElementById('show-particles').checked;
+        for (const a of particleActors) {
+            if (show) renderer.addActor(a); else renderer.removeActor(a);
+        }
     }
     vtkRenderWindow.render();
 }
@@ -403,6 +532,254 @@ function toggleLayer(layer) {
 function updateMeshOpacity() {
     const val = document.getElementById('mesh-opacity').value / 100;
     for (const actor of meshActors) actor.getProperty().setOpacity(val);
+    vtkRenderWindow.render();
+}
+
+// ═════════════════════════════════════════════════════════════
+// AFFICHER PARTICULES DANS LE MÉLANGEUR PARTITIONNÉ
+// ═════════════════════════════════════════════════════════════
+async function addParticlesToPartitionedMixer() {
+    const fileIndex = document.getElementById('exp-dem-file-index').value;
+    const loading = document.getElementById('vtk-loading');
+    
+    loading.style.display = 'flex';
+    
+    try {
+        const url = `/api/dem-particles/?file_index=${fileIndex}&sample_every=5`;
+        const resp = await fetch(url);
+        const data = await resp.json();
+        
+        if (!data.success) {
+            alert('Erreur: ' + (data.error || 'Erreur inconnue'));
+            return;
+        }
+        
+        const particles = data.particles;
+        const renderer = vtkOpenGLRenderWindow.getRenderer();
+        
+        if (particles.x && particles.x.length > 0) {
+            const nParticles = particles.x.length;
+            
+            // Créer les points
+            const points = vtk.Common.Core.vtkPoints.newInstance();
+            const pointData = new Float32Array(nParticles * 3);
+            for (let i = 0; i < nParticles; i++) {
+                pointData[i*3] = particles.x[i];
+                pointData[i*3+1] = particles.y[i];
+                pointData[i*3+2] = particles.z[i];
+            }
+            points.setData(pointData, 3);
+            
+            const polyData = vtk.Common.DataModel.vtkPolyData.newInstance();
+            polyData.setPoints(points);
+            
+            // Vertex cells
+            const verts = vtk.Common.Core.vtkCellArray.newInstance();
+            for (let i = 0; i < nParticles; i++) {
+                verts.insertNextCell([i]);
+            }
+            polyData.setVerts(verts);
+            
+            // Mapper
+            const mapper = vtk.Rendering.Core.vtkMapper.newInstance();
+            mapper.setInputData(polyData);
+            
+            // Actor
+            const actor = vtk.Rendering.Core.vtkActor.newInstance();
+            actor.setMapper(mapper);
+            const prop = actor.getProperty();
+            prop.setPointSize(2);
+            prop.setRepresentationToPoints();
+            prop.setColor(1.0, 0.8, 0.2); // Jaune/or pour contraster avec les cellules
+            prop.setOpacity(0.9);
+            
+            renderer.addActor(actor);
+            particleActors.push(actor);
+        }
+        
+        // Info
+        document.getElementById('particles-overlay-info').textContent = 
+            `${data.metadata.returned_particles} particules chargées (t=${fileIndex})`;
+        document.getElementById('particles-overlay-info').classList.remove('hidden');
+        
+        vtkRenderWindow.render();
+        
+    } catch (e) {
+        console.error(e);
+        alert('Erreur: ' + e.message);
+    } finally {
+        loading.style.display = 'none';
+    }
+}
+
+function removeParticlesFromScene() {
+    const renderer = vtkOpenGLRenderWindow.getRenderer();
+    for (const actor of particleActors) {
+        renderer.removeActor(actor);
+    }
+    particleActors = [];
+    document.getElementById('particles-overlay-info').classList.add('hidden');
+    vtkRenderWindow.render();
+}
+
+// ═════════════════════════════════════════════════════════════
+// CHANGEMENT MODE VISUALISATION
+// ═════════════════════════════════════════════════════════════
+function onVizModeChange() {
+    const mode = document.getElementById('viz-mode-select').value;
+    currentVizMode = mode;
+    
+    const expMode = document.getElementById('experiments-mode');
+    const demMode = document.getElementById('dem-particles-mode');
+    
+    if (mode === 'experiments') {
+        expMode.classList.remove('hidden');
+        demMode.classList.add('hidden');
+    } else {
+        expMode.classList.add('hidden');
+        demMode.classList.remove('hidden');
+        // Nettoyer l'affichage précédent
+        clearVtkScene();
+    }
+}
+
+// ═════════════════════════════════════════════════════════════
+// CHARGER PARTICULES DEM VIA VTK.JS
+// ═════════════════════════════════════════════════════════════
+async function loadDemParticlesVtk() {
+    const fileIndex = document.getElementById('dem-file-index').value;
+    const colorBy = document.getElementById('dem-color-select').value;
+    const loading = document.getElementById('vtk-loading');
+    
+    loading.style.display = 'flex';
+    
+    try {
+        const url = `/api/dem-particles/?file_index=${fileIndex}&species_criterion=${colorBy}`;
+        const resp = await fetch(url);
+        const data = await resp.json();
+        
+        if (!data.success) {
+            alert('Erreur: ' + (data.error || 'Erreur inconnue'));
+            return;
+        }
+        
+        const particles = data.particles;
+        const bounds = data.bounds;
+        
+        // Nettoyer la scène
+        clearVtkScene();
+        
+        // Obtenir le renderer (disponible pour tout le scope)
+        const renderer = vtkOpenGLRenderWindow.getRenderer();
+        
+        // Créer les points particules
+        if (particles.x && particles.x.length > 0) {
+            const nParticles = particles.x.length;
+            
+            // Créer un polydata avec tous les points
+            const points = vtk.Common.Core.vtkPoints.newInstance();
+            const pointData = new Float32Array(nParticles * 3);
+            for (let i = 0; i < nParticles; i++) {
+                pointData[i*3] = particles.x[i];
+                pointData[i*3+1] = particles.y[i];
+                pointData[i*3+2] = particles.z[i];
+            }
+            points.setData(pointData, 3);
+            
+            const polyData = vtk.Common.DataModel.vtkPolyData.newInstance();
+            polyData.setPoints(points);
+            
+            // Créer des vertex cells
+            const verts = vtk.Common.Core.vtkCellArray.newInstance();
+            for (let i = 0; i < nParticles; i++) {
+                verts.insertNextCell([i]);
+            }
+            polyData.setVerts(verts);
+            
+            // Mapper
+            const mapper = vtk.Rendering.Core.vtkMapper.newInstance();
+            mapper.setInputData(polyData);
+            
+            // Actor
+            const actor = vtk.Rendering.Core.vtkActor.newInstance();
+            actor.setMapper(mapper);
+            const prop = actor.getProperty();
+            prop.setPointSize(3);
+            prop.setRepresentationToPoints();
+            
+            // Déterminer la couleur selon le mode
+            if (colorBy === 'z_median' || colorBy === 'r_median') {
+                prop.setColor(0.8, 0.3, 0.3); // Rouge pour espèces
+            } else if (colorBy === 'quadrant') {
+                prop.setColor(0.3, 0.8, 0.3); // Vert pour quadrant
+            } else if (colorBy === 'velocity') {
+                prop.setColor(0.9, 0.5, 0.2); // Orange pour vélocité
+            } else {
+                prop.setColor(0.2, 0.5, 1.0); // Bleu par défaut
+            }
+            prop.setOpacity(0.85);
+            
+            renderer.addActor(actor);
+            particleActors.push(actor);
+        }
+        
+        // Créer la boîte englobante
+        const { xmin, xmax, ymin, ymax, zmin, zmax } = bounds;
+        const bbResult = _build_vtk_box(xmin, xmax, ymin, ymax, zmin, zmax);
+        const bbVertices = bbResult[0];
+        const bbFaces = bbResult[1];
+        
+        const bbPolyData = buildPolyData(bbVertices, bbFaces);
+        const bbMapper = vtk.Rendering.Core.vtkMapper.newInstance();
+        bbMapper.setInputData(bbPolyData);
+        
+        bboxActor = vtk.Rendering.Core.vtkActor.newInstance();
+        bboxActor.setMapper(bbMapper);
+        const bbProp = bboxActor.getProperty();
+        bbProp.setColor(0.3, 0.3, 0.3);
+        bbProp.setOpacity(0.1);
+        bbProp.setRepresentationToWireframe();
+        
+        renderer.addActor(bboxActor);
+        
+        // Mettre à jour les stats
+        document.getElementById('dem-particle-count').textContent = data.metadata.returned_particles;
+        document.getElementById('dem-timestep').textContent = fileIndex;
+        document.getElementById('dem-stats').classList.remove('hidden');
+        
+        // Afficher les contrôles
+        document.getElementById('render-controls').classList.remove('hidden');
+        
+        // Reset camera
+        renderer.resetCamera();
+        vtkRenderWindow.render();
+        
+    } catch (e) {
+        console.error(e);
+        alert('Erreur: ' + e.message);
+    } finally {
+        loading.style.display = 'none';
+    }
+}
+
+// ═════════════════════════════════════════════════════════════
+// FONCTIONS HELPER VTK
+// ═════════════════════════════════════════════════════════════
+function clearVtkScene() {
+    const renderer = vtkOpenGLRenderWindow.getRenderer();
+    
+    // Supprimer les acteurs de particules
+    for (const actor of particleActors) {
+        renderer.removeActor(actor);
+    }
+    particleActors = [];
+    
+    // Supprimer les meshActors (sauf bbox)
+    for (const actor of meshActors) {
+        renderer.removeActor(actor);
+    }
+    meshActors = [];
+    
     vtkRenderWindow.render();
 }
 
