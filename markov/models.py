@@ -25,6 +25,9 @@ class PartitionMethod(models.Model):
         ("quantile", "Quantile (équi-pop)"),
         ("octree", "Octree adaptatif"),
         ("physics", "Physics-aware"),
+        ("adaptive","Adaptive"),
+        ("multizone","Multizone"),
+        ("single","Single")
     ]
 
     name = models.CharField(max_length=50, choices=METHODS, db_index=True)
@@ -186,6 +189,7 @@ class TransitionMatrix(models.Model):
 
     def load_matrix(self):
         """Charge la matrice depuis le bucket."""
+        from src import bucket_io
         from bucket_io import load_matrix_from_bucket
         return load_matrix_from_bucket(self.matrix_bucket_path)
 
