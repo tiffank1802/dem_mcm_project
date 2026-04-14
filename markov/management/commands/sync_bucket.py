@@ -108,6 +108,12 @@ class Command(BaseCommand):
             "quantile_": "quantile",
             "octree_": "octree",
             "physics_": "physics",
+            "adaptive_": "adaptive",
+            "adaptive-": "adaptive",
+            "multizone_": "multizone",
+            "multizone-": "multizone",
+            "single_": "single",
+            "single-": "single",
             "NLT_": "cartesian",  # ancien format
         }
         for prefix, method in prefixes.items():

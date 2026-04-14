@@ -3056,30 +3056,32 @@ def api_partitioner_3d_data(request):
         method = request.GET.get("method", "cartesian")
         file_index = int(request.GET.get("file_index", 100))
 
-        # Récupérer les paramètres depuis la requête
-        from .partitioner_params import get_partitioner_kwargs
+        # Récupérer TOUS les paramètres depuis la requête
+        from .partitioner_params import get_partitioner_kwargs, get_partitioner_schema
+
+        # Construire le dict de paramètres
+        schema = get_partitioner_schema(method)
+        if not schema:
+            return JsonResponse(
+                {"error": f"Unknown partitioner method: {method}"}, status=400
+            )
 
         params = {}
-        if method == "cartesian":
-            params["nx"] = int(request.GET.get("nx", 5))
-            params["ny"] = int(request.GET.get("ny", 5))
-            params["nz"] = int(request.GET.get("nz", 5))
-        elif method == "cylindrical":
-            params["nr"] = int(request.GET.get("nr", 3))
-            params["ntheta"] = int(request.GET.get("ntheta", 4))
-            params["nz"] = int(request.GET.get("nz", 2))
-            params["radial_mode"] = request.GET.get("radial_mode", "equal_dr")
-        elif method == "voronoi":
-            params["n_cells"] = int(request.GET.get("n_cells", 125))
-            params["random_state"] = int(request.GET.get("random_state", 42))
-        elif method == "quantile":
-            params["nx"] = int(request.GET.get("nx", 5))
-            params["ny"] = int(request.GET.get("ny", 5))
-            params["nz"] = int(request.GET.get("nz", 5))
-        elif method == "octree":
-            params["max_particles"] = int(request.GET.get("max_particles", 50))
-            params["max_depth"] = int(request.GET.get("max_depth", 4))
+        # Pour chaque paramètre du schéma, essayer de le lire depuis la requête
+        for param_name in schema["parameters"].keys():
+            if param_name in request.GET:
+                value = request.GET.get(param_name)
+                # Essayer de convertir en int ou float si nécessaire
+                try:
+                    if "." in value:
+                        value = float(value)
+                    else:
+                        value = int(value) if value.isdigit() else value
+                except:
+                    pass
+                params[param_name] = value
 
+        # Utiliser get_partitioner_kwargs qui gerera les transformations
         kwargs = get_partitioner_kwargs(method, **params)
 
         # Charger les particules depuis le bucket HuggingFace
