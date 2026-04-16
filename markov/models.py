@@ -81,7 +81,8 @@ class Experiment(models.Model):
     # ── Partitionnement ──
     partition_method = models.ForeignKey(
         PartitionMethod, on_delete=models.CASCADE,
-        related_name="experiments"
+        related_name="experiments",
+        help_text="méthode de découpage".capitalize()
     )
 
     # ── Hyperparamètres d'apprentissage ──
