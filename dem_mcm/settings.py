@@ -22,9 +22,7 @@ INSTALLED_APPS = [
     "django_htmx",
     # Local
     "markov",
-    "glass_app",
     'core',
-    'trame_app',
 ]
 
 MIDDLEWARE = [

@@ -5,21 +5,19 @@ Utilise les fonctions de analyze_results.py et visualize_partitioning.py
 
 import numpy as np
 import json
+import io
 import traceback
 import sys
+import os
 import logging
 from pathlib import Path
 from django.shortcuts import render, get_object_or_404
-from django.http import JsonResponse
-from django.db.models import Avg, Min, Max, Count
+from django.http import JsonResponse, HttpResponse
+from django.db.models import Avg, Min, Max, Count, Q, F
 from django.views.decorators.cache import cache_page
+from django.conf import settings
 
 from .models import PartitionMethod, Experiment, TransitionMatrix, RSDResult
-from .helpers import (
-    _compute_matrix_metrics,
-    _load_matrix_for_experiment,
-    _compute_rsd_from_matrix,
-)
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -32,6 +30,211 @@ try:
     import polars as pl
 except ImportError:
     pass
+
+
+# ═══════════════════════════════════════════════════════════════
+# HELPERS
+# ═══════════════════════════════════════════════════════════════
+
+
+def _compute_matrix_metrics(P):
+    """Calcule les métriques complètes de la matrice P."""
+    n_states = P.shape[0]
+
+    # Diagonale
+    diag = np.diag(P)
+
+    # Sommes des lignes et colonnes
+    row_sums = P.sum(axis=1)
+    col_sums = P.sum(axis=0)
+
+    # États visités
+    visited = row_sums > 0
+    n_visited = visited.sum()
+    fraction_visited = n_visited / n_states if n_states > 0 else 0
+
+    # Éléments hors-diagonale
+    off_diagonal = P.copy()
+    np.fill_diagonal(off_diagonal, 0)
+
+    metrics = {
+        # Diagonale (P rester)
+        "diag_mean": float(diag.mean()),
+        "diag_std": float(diag.std()),
+        "diag_min": float(diag.min()),
+        "diag_max": float(diag.max()),
+        # Sommes des lignes (normalisation)
+        "row_sum_mean": float(row_sums.mean()),
+        "row_sum_std": float(row_sums.std()),
+        "row_sum_min": float(row_sums.min()),
+        "row_sum_max": float(row_sums.max()),
+        # Sommes des colonnes
+        "col_sum_mean": float(col_sums.mean()),
+        "col_sum_std": float(col_sums.std()),
+        "col_sum_min": float(col_sums.min()),
+        "col_sum_max": float(col_sums.max()),
+        # Visitabilité
+        "n_visited": int(n_visited),
+        "fraction_visited": float(fraction_visited * 100),
+        # Hors-diagonale
+        "off_diagonal_mean": float(
+            off_diagonal[off_diagonal > 0].mean() if (off_diagonal > 0).any() else 0
+        ),
+        # Déterminant et trace
+        "trace": float(np.trace(P)),
+        "determinant": float(np.linalg.det(P)),
+    }
+
+    # Valeurs propres
+    try:
+        eigenvalues = np.linalg.eigvals(P)
+        eigenvalues_sorted = np.sort(np.abs(eigenvalues))[::-1]
+        eigenvalues_list = eigenvalues_sorted[
+            : min(20, len(eigenvalues_sorted))
+        ].tolist()
+
+        metrics["eigenvalues"] = eigenvalues_list
+        metrics["eigenvalue_1"] = (
+            float(eigenvalues_sorted[0]) if len(eigenvalues_sorted) > 0 else 0
+        )
+        metrics["eigenvalue_2"] = (
+            float(eigenvalues_sorted[1]) if len(eigenvalues_sorted) > 1 else 0
+        )
+        metrics["spectral_gap"] = (
+            float(1.0 - metrics["eigenvalue_2"]) if len(eigenvalues_sorted) > 1 else 0
+        )
+    except Exception:
+        metrics["eigenvalues"] = []
+        metrics["eigenvalue_1"] = 0
+        metrics["eigenvalue_2"] = 0
+        metrics["spectral_gap"] = 0
+
+    return metrics
+
+
+def _load_matrix_for_experiment(experiment):
+    """
+    Charge la matrice P et calcule les métriques.
+
+    Utilise les métriques pré-calculées de la base de données si la matrice
+    ne peut pas être chargée depuis le bucket HuggingFace.
+    """
+    try:
+        # Essayer de charger la matrice depuis le bucket
+        P = experiment.matrix.load_matrix()
+        metrics = _compute_matrix_metrics(P)
+
+        diag = np.diag(P)
+        row_sums = P.sum(axis=1)
+        col_sums = P.sum(axis=0)
+
+        return {
+            "matrix": P,
+            "diagonal": diag.tolist(),
+            "row_sums": row_sums.tolist(),
+            "col_sums": col_sums.tolist(),
+            "heatmap": P.tolist(),
+            "shape": list(P.shape),
+            "error": None,
+            **metrics,  # Inclure tous les metrics
+        }
+    except FileNotFoundError as e:
+        # Matrice non trouvée dans le bucket - utiliser les métriques pré-calculées
+        logger.warning(
+            f"Matrice non trouvée pour {experiment.folder_name}: {e}. "
+            f"Utilisation des métriques pré-calculées."
+        )
+        if experiment.matrix:
+            return {
+                "matrix": None,
+                "diagonal": None,
+                "row_sums": None,
+                "col_sums": None,
+                "heatmap": None,
+                "shape": [experiment.n_states, experiment.n_states],
+                "error": f"Matrice non disponible (sera chargée ultérieurement)",
+                "diagonal_mean": experiment.matrix.diagonal_mean,
+                "eigenvalue_2": experiment.matrix.eigenvalue_2,
+                "spectral_gap": experiment.matrix.spectral_gap,
+                "from_cached_metrics": True,
+            }
+        else:
+            return {"error": "Pas de matrice enregistrée pour cette expérience"}
+    except Exception as e:
+        # Erreur inopinée
+        error_msg = f"Erreur lors du chargement de la matrice: {str(e)}"
+        logger.error(
+            f"{error_msg} ({experiment.folder_name})\n"
+            f"Traceback: {traceback.format_exc()}"
+        )
+
+        # Fallback: utiliser les métriques pré-calculées si disponibles
+        if experiment.matrix:
+            return {
+                "matrix": None,
+                "error": error_msg,
+                "diagonal_mean": experiment.matrix.diagonal_mean,
+                "eigenvalue_2": experiment.matrix.eigenvalue_2,
+                "spectral_gap": experiment.matrix.spectral_gap,
+                "from_cached_metrics": True,
+            }
+        else:
+            return {"error": error_msg}
+
+
+def _compute_rsd_from_matrix(P, n_steps=200, initial_split=0.5, initial_state=None):
+    """Calcule le RSD depuis une matrice P (sans MarkovAnalyzer).
+
+    Args:
+        P: matrice de transition (n_states x n_states)
+        n_steps: nombre de pas de prédiction
+        initial_split: fraction de cellules remplies (ignoré si initial_state fourni)
+        initial_state: vecteur d'état initial réel (si fourni, utilise celui-ci)
+    """
+    n_states = P.shape[0]
+    if initial_state is not None:
+        C = np.array(initial_state, dtype=float)
+    else:
+        C = np.zeros(n_states)
+        mid = int(n_states * initial_split)
+        C[:mid] = 1.0
+
+    rsd = np.zeros(n_steps)
+    entropy = np.zeros(n_steps)
+    concentration_history = np.zeros((n_steps, n_states))
+
+    for t in range(n_steps):
+        C = C @ P
+        concentration_history[t] = C
+
+        visited = C > 1e-12
+        if visited.sum() > 1:
+            mean_c = C[visited].mean()
+            std_c = C[visited].std()
+            rsd[t] = std_c / mean_c if mean_c > 0 else 0
+
+        C_pos = C[C > 1e-12]
+        if len(C_pos) > 0 and n_states > 1:
+            entropy[t] = -np.sum(C_pos * np.log(C_pos)) / np.log(n_states)
+
+    rsd_0 = rsd[0] if rsd[0] > 0 else 1.0
+    t50 = next((t for t in range(n_steps) if rsd[t] < 0.5 * rsd_0), None)
+    t90 = next((t for t in range(n_steps) if rsd[t] < 0.1 * rsd_0), None)
+
+    return {
+        "rsd_percent": (rsd * 100).tolist(),
+        "entropy": entropy.tolist(),
+        "concentration_final": concentration_history[-1].tolist(),
+        "rsd_initial": float(rsd[0] * 100),
+        "rsd_final": float(rsd[-1] * 100),
+        "mixing_time_50": t50,
+        "mixing_time_90": t90,
+    }
+
+
+# ═══════════════════════════════════════════════════════════════
+# UNIFIED ANALYSIS (Comparaison + RSD + DEM vs Markov)
+# ═══════════════════════════════════════════════════════════════
 
 
 def unified_analysis(request):
@@ -864,105 +1067,3 @@ def metrics_analysis(request):
         },
     )
 
-
-# ═══════════════════════════════════════════════════════════════
-# API JSON
-# ═══════════════════════════════════════════════════════════════
-
-
-def partitioner_3d_trame(request):
-    """Page de visualisation 3D avec Trame/vtk.js."""
-    return render(request, "markov/partitioner_3d_trame.html")
-
-
-def partitioner_3d(request):
-    """Render the 3D partitioner visualization page."""
-    return render(request, "markov/partitioner_3d.html")
-
-
-# ═══════════════════════════════════════════════════════════════════════
-# ANALYSE UNIFIÉE - ENDPOINTS POUR INTERFACE ENRICHIE
-# ═══════════════════════════════════════════════════════════════════════
-
-
-def results_gallery(request):
-    """Display gallery of all experiment results with glass effect."""
-
-    # Fetch all experiments with related data
-    experiments = (
-        Experiment.objects.select_related("partition_method", "matrix")
-        .prefetch_related("rsd_results")
-        .all()
-    )
-
-    # Map experiments to result cards
-    results = []
-    for exp in experiments:
-        rsd_dem = exp.rsd_results.filter(source="dem").first()
-        rsd_markov = exp.rsd_results.filter(source="markov").first()
-
-        results.append(
-            {
-                "id": exp.id,
-                "name": exp.folder_name[:50],
-                "analysis_type": exp.partition_method.get_name_display(),
-                "status": "completed" if (rsd_dem and rsd_markov) else "pending",
-                "get_status_display": "Complétée"
-                if (rsd_dem and rsd_markov)
-                else "En cours",
-                "image_url": None,  # No image URL for experiments
-                "iterations": exp.n_states,
-                "accuracy": float(exp.matrix.diagonal_mean * 100) if exp.matrix else 0,
-                "duration": f"{exp.nlt} paires",
-                "detail_url": f"/markov/experiments/{exp.id}/",
-                "download_url": f"/markov/api/download-experiment/{exp.id}/",
-            }
-        )
-
-    # Count statuses
-    total_results = len(results)
-    completed_count = sum(1 for r in results if r["status"] == "completed")
-    pending_count = sum(1 for r in results if r["status"] == "pending")
-    failed_count = 0  # No failed results in our case
-
-    return render(
-        request,
-        "markov/results_gallery.html",
-        {
-            "results": results,
-            "total_results": total_results,
-            "completed_count": completed_count,
-            "pending_count": pending_count,
-            "failed_count": failed_count,
-        },
-    )
-
-
-def image_gallery(request):
-    """Display image gallery with glass effect (placeholder for future image storage)."""
-
-    # For now, we'll create a gallery from experiment matrices
-    # In future, this could use a dedicated GalleryImage model
-
-    experiments = Experiment.objects.select_related("partition_method", "matrix").all()
-
-    gallery_items = []
-    for exp in experiments:
-        gallery_items.append(
-            {
-                "id": exp.id,
-                "title": exp.folder_name[:50],
-                "description": f"{exp.partition_method.label} - {exp.n_states} états",
-                "image_url": f"/markov/api/experiment-thumbnail/{exp.id}/",
-                "full_url": f"/markov/experiments/{exp.id}/",
-            }
-        )
-
-    return render(
-        request,
-        "markov/image_gallery.html",
-        {
-            "gallery_items": gallery_items,
-            "total_items": len(gallery_items),
-        },
-    )
